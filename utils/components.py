@@ -3,8 +3,8 @@ from dash import html
 from utils.theme import CARD_STYLE, COLORS
 
 
-def page_header(title, subtitle):
-    return html.Div([
+def page_header(title, subtitle, right_content=None):
+    left = html.Div([
         html.Div(title, style={
             "fontSize": "28px",
             "fontWeight": "700",
@@ -15,7 +15,20 @@ def page_header(title, subtitle):
             "fontSize": "14px",
             "color": COLORS["muted"],
         }),
-    ], style={"marginBottom": "24px"})
+    ])
+
+    if right_content is None:
+        return html.Div([left], style={"marginBottom": "24px"})
+
+    return html.Div([
+        left,
+        html.Div(right_content, style={"display": "flex", "alignItems": "center"}),
+    ], style={
+        "display": "flex",
+        "justifyContent": "space-between",
+        "alignItems": "flex-start",
+        "marginBottom": "24px",
+    })
 
 
 def section_card(title, subtitle, content, style_extra=None):
@@ -42,6 +55,26 @@ def section_card(title, subtitle, content, style_extra=None):
         ]),
         html.Div(content, style={"width": "100%"}),
     ], style=style)
+
+
+def filter_control(label, children, min_width="200px"):
+    return html.Div([
+        html.Div(label, style={
+            "fontSize": "11px",
+            "fontWeight": "600",
+            "color": COLORS["muted"],
+            "marginBottom": "6px",
+            "textTransform": "uppercase",
+            "letterSpacing": "0.03em",
+        }),
+        children,
+    ], style={
+        "background": COLORS["surface"],
+        "border": f"1px solid {COLORS['border']}",
+        "borderRadius": "8px",
+        "padding": "8px 12px",
+        "minWidth": min_width,
+    })
 
 
 def kpi_card(title, value, note, color=None, accent=None):

@@ -18,12 +18,13 @@ app.layout = html.Div([
         color="primary",
         dark=True,
         children=[
-            dbc.NavItem(dbc.NavLink("Overview", href="/")),
-            dbc.NavItem(dbc.NavLink("Operational", href="/operational")),
+            dbc.NavItem(dbc.NavLink("Executive Summary", href="/")),
+            dbc.NavItem(dbc.NavLink("Recruitment Operations", href="/operational")),
+            dbc.NavItem(dbc.NavLink("Talent Matching", href="/talent-matching")),
         ],
     ),
     html.Div(dash.page_container, style={"padding": "24px"}),
 ])
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False, port=8052)

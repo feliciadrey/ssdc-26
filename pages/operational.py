@@ -1,160 +1,337 @@
 import dash
-from dash import html, dcc, dash_table
+from dash import html, dcc, dash_table, Input, Output, callback
 import plotly.graph_objects as go
-import plotly.express as px
 import pandas as pd
+from datetime import datetime
 
 from utils.data_loader import load_all
 from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT
-from utils.components import kpi_card, section_card, page_header
+from utils.components import kpi_card, section_card, page_header, filter_control
 
-dash.register_page(__name__, path="/", name="Performance Overview")
+dash.register_page(__name__, path="/operational", name="Recruitment Ops")
 
+TODAY = pd.Timestamp(datetime(2026, 7, 18))
+
+# ----------------------------------------------------------------------------
+# Data prep
+# ----------------------------------------------------------------------------
 data = load_all()
-tracking_company = data["tracking_company"]
-tracking_student = data["tracking_student"]
-talent_request = data["talent_request"]
-company = data["company"]
+tracking_company = data["tracking_company"].copy()
+tracking_student = data["tracking_student"].copy()
+talent_request = data["talent_request"].copy()
 
-# ---- KPI calculations ----
-total_requests = len(talent_request)
-total_sent = int(tracking_company["jumlah_dikirimkan"].sum())
-total_requested = int(tracking_company["jumlah_permintaan"].sum())
-fulfillment_rate = round(100 * total_sent / total_requested, 0) if total_requested else 0
 
-total_placed = int((tracking_student["progress_student"] == "Placement").sum())
-placement_rate = round(100 * total_placed / len(tracking_student), 1) if len(tracking_student) else 0
+def _merge_request_detail(tc_df, tr_df):
+    """Bring headcount / minimum_semester / working_arrangement / bidang_studi
+    from talent_request onto tracking_company. Prefers the id_talent_req FK;
+    falls back to matching on (nama_perusahaan, posisi) since that's the join
+    key the rest of this app already relies on."""
+    detail_cols = ["headcount", "minimum_semester", "working_arrangement", "bidang_studi_dibutuhkan"]
+    if "id_talent_req" in tc_df.columns and "id_talent_req" in tr_df.columns:
+        cols = ["id_talent_req"] + [c for c in detail_cols if c in tr_df.columns]
+        return tc_df.merge(tr_df[cols], on="id_talent_req", how="left")
+    tr_r = tr_df.rename(columns={"nama_posisi": "posisi"})
+    cols = ["nama_perusahaan", "posisi"] + [c for c in detail_cols if c in tr_r.columns]
+    return tc_df.merge(tr_r[cols], on=["nama_perusahaan", "posisi"], how="left")
 
-ghosting_count = int((tracking_student["progress_student"] == "Ghosting").sum())
-ghosting_rate = round(100 * ghosting_count / len(tracking_student), 1) if len(tracking_student) else 0
 
-kpi_row = html.Div([
-    kpi_card("Talent request masuk", f"{total_requests}", "Semester berjalan"),
-    kpi_card("Kandidat dikirim", f"{total_sent}", f"Fulfillment {fulfillment_rate:.0f}% dari diminta"),
-    kpi_card("Placement rate", f"{placement_rate}%", "Target 45%",
-             color=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
-             accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"]),
-    kpi_card("Total placement", f"{total_placed}", "Kandidat berhasil ditempatkan",
-             color=COLORS["success"], accent=COLORS["success"]),
-    kpi_card("Ghosting rate", f"{ghosting_rate}%", "Dari total kandidat ditracking",
-             color=COLORS["danger"] if ghosting_rate > 7 else COLORS["text"],
-             accent=COLORS["danger"] if ghosting_rate > 7 else None),
-], style={"display": "flex", "gap": "12px", "marginBottom": "16px"})
+tc = _merge_request_detail(tracking_company, talent_request)
+tc["aging_days"] = (TODAY - tc["request_date"]).dt.days
+tc["is_open"] = tc["jumlah_dikirimkan"] < tc["jumlah_permintaan"]
+tc["processing_days"] = (tc["send_date"].fillna(TODAY) - tc["request_date"]).dt.days
 
-# ---- Funnel ----
-stage_counts = tracking_student["progress_student"].value_counts()
-funnel_fig = go.Figure(go.Funnel(
-    y=["Dikirim", "Diproses perusahaan", "Interview", "Final interview", "Placement"],
-    x=[
-        total_sent,
-        len(tracking_student),
-        int(stage_counts.get("Interview User", 0) + stage_counts.get("Final Interview", 0) + stage_counts.get("Placement", 0)),
-        int(stage_counts.get("Final Interview", 0) + stage_counts.get("Placement", 0)),
-        total_placed,
+MIN_SEMESTER_OPTIONS = sorted(int(s) for s in tc["minimum_semester"].dropna().unique()) if "minimum_semester" in tc else []
+POSITION_OPTIONS = sorted(s for s in tc["posisi"].dropna().unique())
+WORKING_ARR_OPTIONS = sorted(s for s in tc["working_arrangement"].dropna().unique()) if "working_arrangement" in tc else []
+BIDANG_STUDI_OPTIONS = sorted(s for s in tc["bidang_studi_dibutuhkan"].dropna().unique()) if "bidang_studi_dibutuhkan" in tc else []
+
+
+# ----------------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------------
+def empty_fig(height=260, message="Tidak ada data untuk filter ini"):
+    fig = go.Figure()
+    fig.update_layout(**PLOTLY_LAYOUT, height=height)
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(visible=False)
+    fig.add_annotation(text=message, showarrow=False, font=dict(color=COLORS["muted"], size=12))
+    return fig
+
+
+def filter_tc(min_semester, position, arr, bidang):
+    d = tc.copy()
+    if min_semester is not None:
+        d = d[d["minimum_semester"] == min_semester]
+    if position:
+        d = d[d["posisi"] == position]
+    if arr:
+        d = d[d["working_arrangement"] == arr]
+    if bidang:
+        d = d[d["bidang_studi_dibutuhkan"] == bidang]
+    return d
+
+
+def matching_students(d):
+    if not len(d):
+        return tracking_student.iloc[0:0].copy()
+    pairs = set(zip(d["nama_perusahaan"], d["posisi"]))
+    mask = [p in pairs for p in zip(tracking_student["company"], tracking_student["position"])]
+    return tracking_student[mask].copy()
+
+
+# ----------------------------------------------------------------------------
+# Static shell
+# ----------------------------------------------------------------------------
+filter_bar = html.Div([
+    filter_control("Min Semester", dcc.Dropdown(
+        id="op-filter-semester",
+        options=[{"label": str(s), "value": s} for s in MIN_SEMESTER_OPTIONS],
+        placeholder="Semua semester", clearable=True, style={"minWidth": "140px", "border": "none"},
+    ), min_width="160px"),
+    filter_control("Position", dcc.Dropdown(
+        id="op-filter-position",
+        options=[{"label": s, "value": s} for s in POSITION_OPTIONS],
+        placeholder="Semua posisi", clearable=True, style={"minWidth": "160px", "border": "none"},
+    ), min_width="180px"),
+    filter_control("Working Arr.", dcc.Dropdown(
+        id="op-filter-arr",
+        options=[{"label": s, "value": s} for s in WORKING_ARR_OPTIONS],
+        placeholder="Semua tipe", clearable=True, style={"minWidth": "150px", "border": "none"},
+    ), min_width="170px"),
+    filter_control("Bidang Studi", dcc.Dropdown(
+        id="op-filter-bidang",
+        options=[{"label": s, "value": s} for s in BIDANG_STUDI_OPTIONS],
+        placeholder="Semua bidang", clearable=True, style={"minWidth": "170px", "border": "none"},
+    ), min_width="190px"),
+], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap"})
+
+# export_button = html.Button(
+#     "Export as PDF", id="op-export-pdf-btn", n_clicks=0,
+#     style={"background": COLORS["accent"], "color": "#FFFFFF", "border": "none", "borderRadius": "8px",
+#            "padding": "10px 16px", "fontSize": "13px", "fontWeight": "600", "cursor": "pointer"},
+# )
+
+bubble_colorby = dcc.Dropdown(
+    id="op-bubble-colorby",
+    options=[
+        {"label": "Warnai: Progress", "value": "progress"},
+        {"label": "Warnai: Working Arrangement", "value": "working_arrangement"},
     ],
-    marker={"color": [CATEGORICAL[0]] * 4 + [COLORS["success"]]},
-    textinfo="value+percent previous",
-))
-funnel_fig.update_layout(**PLOTLY_LAYOUT, height=260)
-
-# ---- Composition by jenis penempatan ----
-jenis_counts = tracking_student["jenis_penempatan"].value_counts().sort_values()
-bar_fig = go.Figure(go.Bar(
-    x=jenis_counts.values, y=jenis_counts.index, orientation="h",
-    marker_color=CATEGORICAL[0],
-))
-bar_fig.update_layout(**PLOTLY_LAYOUT, height=260, xaxis_title=None, yaxis_title=None)
-
-# ---- Trend by month ----
-tc = tracking_company.dropna(subset=["send_date"]).copy()
-tc["month"] = tc["send_date"].dt.to_period("M").astype(str)
-trend = tc.groupby("month")["jumlah_dikirimkan"].sum().reset_index()
-trend_fig = go.Figure()
-trend_fig.add_trace(go.Scatter(x=trend["month"], y=trend["jumlah_dikirimkan"],
-                                mode="lines+markers", line=dict(color=CATEGORICAL[0], width=2)))
-if len(trend):
-    target = trend["jumlah_dikirimkan"].mean() * 1.15
-    trend_fig.add_hline(y=target, line_dash="dash", line_color=COLORS["danger"],
-                         annotation_text="Target")
-trend_fig.update_layout(**PLOTLY_LAYOUT, height=200)
-
-# ---- Placement rate by prodi ----
-ts_with_prodi = tracking_student.merge(
-    data["student_all"][["NIM", "program_studi"]], on="NIM", how="left"
+    value="progress", clearable=False, style={"fontSize": "11px", "minWidth": "200px"},
 )
-prodi_summary = ts_with_prodi.groupby("program_studi").agg(
-    total=("NIM", "count"),
-    placed=("progress_student", lambda s: (s == "Placement").sum())
-).reset_index()
-prodi_summary["rate"] = pd.to_numeric(
-    100 * prodi_summary["placed"] / prodi_summary["total"],
-    errors="coerce",
-).round(1).fillna(0)
-prodi_summary = prodi_summary.sort_values("rate", ascending=True)
-avg_rate = prodi_summary["rate"].mean() if len(prodi_summary) else 0
-prodi_summary["color"] = prodi_summary["rate"].apply(
-    lambda r: COLORS["success"] if r >= avg_rate else (COLORS["warning"] if r >= avg_rate * 0.7 else COLORS["danger"])
-)
-prodi_fig = go.Figure(go.Bar(
-    x=prodi_summary["rate"], y=prodi_summary["program_studi"], orientation="h",
-    marker_color=prodi_summary["color"],
-))
-prodi_fig.update_layout(**PLOTLY_LAYOUT, height=260, xaxis_title="Placement rate (%)")
 
-# ---- Company leaderboard ----
-comp_summary = tracking_company.groupby("nama_perusahaan").agg(
-    diminta=("jumlah_permintaan", "sum"),
-    dikirim=("jumlah_dikirimkan", "sum"),
-).reset_index()
-ts_company = tracking_student.groupby("company")["progress_student"].apply(
-    lambda s: (s == "Placement").sum()
-).reset_index(name="placed")
-comp_summary = comp_summary.merge(ts_company, left_on="nama_perusahaan", right_on="company", how="left")
-comp_summary["placed"] = comp_summary["placed"].fillna(0).astype(int)
-comp_summary["rate_%"] = pd.to_numeric(
-    100 * comp_summary["placed"] / comp_summary["dikirim"].replace(0, pd.NA),
-    errors="coerce",
-).round(0).fillna(0)
-comp_summary = comp_summary.sort_values("rate_%", ascending=False).head(10)
-comp_table = dash_table.DataTable(
-    columns=[
-        {"name": "Company", "id": "nama_perusahaan"},
-        {"name": "Dikirim", "id": "dikirim"},
-        {"name": "Placed", "id": "placed"},
-        {"name": "Rate %", "id": "rate_%"},
-    ],
-    data=comp_summary[["nama_perusahaan", "dikirim", "placed", "rate_%"]].to_dict("records"),
-    style_as_list_view=True,
-    style_header={"backgroundColor": COLORS["surface"], "fontWeight": "600",
-                  "fontSize": "11px", "borderBottom": f"1px solid {COLORS['border']}"},
-    style_cell={"fontSize": "12px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif"},
-    style_data_conditional=[{
-        "if": {"filter_query": "{rate_%} >= 50", "column_id": "rate_%"},
-        "color": COLORS["success"], "fontWeight": "600",
-    }],
+ghosting_toggle = dcc.Checklist(
+    id="op-ghosting-cumulative",
+    options=[{"label": " Tampilkan kumulatif", "value": "cumulative"}],
+    value=[], style={"fontSize": "11px", "color": COLORS["muted"]},
 )
 
 layout = html.Div([
-    page_header("Placement Performance Overview", "Genap 2025/2026 · seluruh program studi"),
-    kpi_row,
+    page_header("Recruitment Operations (BT-03, BT-02, BT-05)",
+                "Program manager view · update real-time"),
+    html.Div(id="op-export-pdf-dummy", style={"display": "none"}),
+    filter_bar,
+    html.Div(id="op-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
+
+    # Row 1: Bubble chart / Recruitment funnel / Priority req table
     html.Div([
-        section_card("Placement funnel", "Konversi dari dikirim ke placement",
-                     dcc.Graph(figure=funnel_fig, config={"displayModeBar": False}),
-                     style_extra={"flex": "6"}),
-        section_card("Placement by jenis penempatan", "Magang / part-time / full-time",
-                     dcc.Graph(figure=bar_fig, config={"displayModeBar": False}),
+        section_card("Bubble Chart: Durasi Req vs HeadCount",
+                     html.Div(["Ukuran = jumlah diminta · ", bubble_colorby],
+                              style={"display": "flex", "alignItems": "center", "gap": "6px",
+                                     "color": COLORS["muted"], "fontSize": "12px"}),
+                     dcc.Graph(id="op-bubble-graph", config={"displayModeBar": False}),
+                     style_extra={"flex": "4"}),
+        section_card("Recruitment Funnel", "Konversi dari dikirim ke placement",
+                     dcc.Graph(id="op-funnel-graph", config={"displayModeBar": False}),
+                     style_extra={"flex": "4"}),
+        section_card("Priority Req Table", "Skor = usia request x headcount, top 10 masih terbuka",
+                     html.Div(id="op-priority-table"),
                      style_extra={"flex": "4"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
-    section_card("Placement trend by month", "Jumlah kandidat dikirim, dengan target reference line",
-                 dcc.Graph(figure=trend_fig, config={"displayModeBar": False}),
-                 style_extra={"marginBottom": "12px"}),
-
+    # Row 2: Ghosting trend / Ghosting by selection stage
     html.Div([
-        section_card("Placement rate by program studi", "Sorted, hijau = di atas rata-rata",
-                     dcc.Graph(figure=prodi_fig, config={"displayModeBar": False}),
+        section_card("Ghosting Trend",
+                     html.Div(["Per bulan · ", ghosting_toggle],
+                              style={"display": "flex", "alignItems": "center", "gap": "6px"}),
+                     dcc.Graph(id="op-ghosting-trend-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
-        section_card("Top companies by acceptance rate", "10 besar",
-                     comp_table, style_extra={"flex": "6"}),
+        section_card("Ghosting by Selection Stage", "Distribusi status akhir kandidat (kolom rejection)",
+                     dcc.Graph(id="op-ghosting-stage-graph", config={"displayModeBar": False}),
+                     style_extra={"flex": "6"}),
     ], style={"display": "flex", "gap": "12px"}),
 ], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
+
+
+# ----------------------------------------------------------------------------
+# Export as PDF (browser print dialog, same pattern as the Executive Summary page)
+# ----------------------------------------------------------------------------
+# dash.clientside_callback(
+#     "function(n_clicks) { if (n_clicks) { window.print(); } return ''; }",
+#     Output("op-export-pdf-dummy", "children"),
+#     Input("op-export-pdf-btn", "n_clicks"),
+#     prevent_initial_call=True,
+# )
+
+
+# ----------------------------------------------------------------------------
+# Main callback: filters (+ interactive extras) -> KPIs + all charts
+# ----------------------------------------------------------------------------
+@callback(
+    Output("op-kpi-row", "children"),
+    Output("op-bubble-graph", "figure"),
+    Output("op-funnel-graph", "figure"),
+    Output("op-priority-table", "children"),
+    Output("op-ghosting-trend-graph", "figure"),
+    Output("op-ghosting-stage-graph", "figure"),
+    Input("op-filter-semester", "value"),
+    Input("op-filter-position", "value"),
+    Input("op-filter-arr", "value"),
+    Input("op-filter-bidang", "value"),
+    Input("op-bubble-colorby", "value"),
+    Input("op-ghosting-cumulative", "value"),
+)
+def update_ops(min_semester, position, arr, bidang, colorby, ghosting_mode):
+    d = filter_tc(min_semester, position, arr, bidang)
+    ts = matching_students(d)
+
+    # ---- KPIs ----
+    open_request = int(d["is_open"].sum()) if len(d) else 0
+    sent_mask = d["send_date"].notna() if len(d) else pd.Series(dtype=bool)
+    avg_processing = round(d.loc[sent_mask, "processing_days"].mean(), 1) if sent_mask.any() else None
+    urgent_request = int((d["is_open"] & (d["aging_days"] > 7)).sum()) if len(d) else 0
+    ghosting_count = int((ts["progress_student"] == "Ghosting").sum())
+
+    kpi_row = [
+        kpi_card("Open Request", f"{open_request}", "Belum sepenuhnya terpenuhi"),
+        kpi_card("Average Processing Time",
+                  f"{avg_processing} hari" if avg_processing is not None else "-",
+                  "Request date -> send date"),
+        kpi_card("Urgent Request", f"{urgent_request}", "Terbuka > 7 hari",
+                  color=COLORS["danger"] if urgent_request > 0 else COLORS["text"],
+                  accent=COLORS["danger"] if urgent_request > 0 else None),
+        kpi_card("Jumlah Ghosting", f"{ghosting_count}", "Perlu eskalasi",
+                  color=COLORS["danger"], accent=COLORS["danger"]),
+    ]
+
+    # ---- Bubble chart: durasi req (aging) vs headcount ----
+    if len(d) and "headcount" in d.columns and d["headcount"].notna().any():
+        db = d.dropna(subset=["headcount"]).copy()
+        db["headcount"] = pd.to_numeric(db["headcount"], errors="coerce")
+        db = db.dropna(subset=["headcount"])
+        color_col = colorby if colorby in db.columns else "progress"
+        groups = db[color_col].fillna("Tidak diketahui").unique() if color_col in db.columns else ["Semua"]
+        bubble_fig = go.Figure()
+        for i, g in enumerate(sorted(groups, key=str)):
+            sub = db[db[color_col].fillna("Tidak diketahui") == g] if color_col in db.columns else db
+            bubble_fig.add_trace(go.Scatter(
+                x=sub["aging_days"], y=sub["headcount"], mode="markers", name=str(g),
+                marker=dict(size=sub["jumlah_permintaan"].clip(lower=4) * 3,
+                            color=CATEGORICAL[i % len(CATEGORICAL)], opacity=0.7,
+                            line=dict(width=1, color=COLORS["surface"])),
+            ))
+        bubble_fig.update_layout(**PLOTLY_LAYOUT, height=260,
+                                  xaxis_title="Durasi request (hari)", yaxis_title="Headcount",
+                                  legend=dict(orientation="h", y=-0.3, font=dict(size=9)))
+    else:
+        bubble_fig = empty_fig(260, "Data headcount tidak tersedia untuk filter ini")
+
+    # ---- Recruitment funnel ----
+    if len(d) or len(ts):
+        total_sent = int(d["jumlah_dikirimkan"].sum()) if len(d) else 0
+        stage_counts = ts["progress_student"].value_counts()
+        interview_plus = int(stage_counts.get("Interview User", 0) + stage_counts.get("Final Interview", 0) + stage_counts.get("Placement", 0))
+        final_plus = int(stage_counts.get("Final Interview", 0) + stage_counts.get("Placement", 0))
+        placed = int(stage_counts.get("Placement", 0))
+        funnel_fig = go.Figure(go.Funnel(
+            y=["Dikirim", "Diproses perusahaan", "Interview", "Final interview", "Placement"],
+            x=[total_sent, len(ts), interview_plus, final_plus, placed],
+            marker={"color": [CATEGORICAL[0]] * 4 + [COLORS["success"]]},
+            textinfo="value+percent previous",
+        ))
+        funnel_fig.update_layout(**PLOTLY_LAYOUT, height=260)
+    else:
+        funnel_fig = empty_fig(260)
+
+    # ---- Priority req table ----
+    if len(d):
+        open_d = d[d["is_open"]].copy()
+        if len(open_d) and "headcount" in open_d.columns:
+            open_d["headcount_n"] = pd.to_numeric(open_d["headcount"], errors="coerce").fillna(1)
+            open_d["priority_score"] = (open_d["aging_days"].clip(lower=0) * open_d["headcount_n"]).round(0)
+            open_d = open_d.sort_values("priority_score", ascending=False).head(10)
+            priority_table = dash_table.DataTable(
+                columns=[
+                    {"name": "Company", "id": "nama_perusahaan"},
+                    {"name": "Posisi", "id": "posisi"},
+                    {"name": "Headcount", "id": "headcount_n"},
+                    {"name": "Usia (hari)", "id": "aging_days"},
+                    {"name": "Skor", "id": "priority_score"},
+                ],
+                data=open_d[["nama_perusahaan", "posisi", "headcount_n", "aging_days", "priority_score"]].to_dict("records"),
+                style_as_list_view=True,
+                style_header={"backgroundColor": COLORS["surface"], "fontWeight": "600", "fontSize": "11px",
+                              "borderBottom": f"1px solid {COLORS['border']}"},
+                style_cell={"fontSize": "11px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif"},
+                style_data_conditional=[
+                    {"if": {"filter_query": "{aging_days} > 7"}, "backgroundColor": COLORS["danger_bg"]},
+                ],
+            )
+        else:
+            priority_table = html.Div("Tidak ada request terbuka untuk filter ini.",
+                                       style={"fontSize": "12px", "color": COLORS["muted"]})
+    else:
+        priority_table = html.Div("Tidak ada data untuk filter ini.",
+                                   style={"fontSize": "12px", "color": COLORS["muted"]})
+
+    # ---- Ghosting trend ----
+    ts_ghost = ts[ts["progress_student"] == "Ghosting"]
+    if len(ts_ghost) and ts_ghost["last_update"].notna().any():
+        by_month = (
+            ts_ghost.dropna(subset=["last_update"])
+                    .groupby(ts_ghost["last_update"].dt.to_period("M"))
+                    .size()
+        )
+        months = sorted(by_month.index)
+        month_labels = [str(m) for m in months]
+        monthly_values = [by_month.get(m, 0) for m in months]
+        trend_fig = go.Figure()
+        if "cumulative" in (ghosting_mode or []):
+            cum_values = pd.Series(monthly_values).cumsum().tolist()
+            trend_fig.add_trace(go.Scatter(x=month_labels, y=cum_values, mode="lines+markers",
+                                            name="Kumulatif", line=dict(color=COLORS["danger"], width=2)))
+        else:
+            trend_fig.add_trace(go.Scatter(x=month_labels, y=monthly_values, mode="lines+markers",
+                                            name="Ghosting per bulan", line=dict(color=COLORS["warning"], width=2)))
+            trend_fig.add_trace(go.Scatter(x=month_labels, y=pd.Series(monthly_values).cumsum().tolist(),
+                                            mode="lines+markers", name="Kumulatif",
+                                            line=dict(color=COLORS["danger"], width=2, dash="dot")))
+        trend_fig.update_layout(**PLOTLY_LAYOUT, height=220, legend=dict(orientation="h", y=-0.3, font=dict(size=9)))
+    else:
+        trend_fig = empty_fig(220, "Belum ada data ghosting untuk filter ini")
+
+    # ---- Status distribution via tracking_student.rejection ----
+    # This column holds the final status for every tracked student, not a
+    # "which stage did they ghost from" field: Progress, Placement, Ghosting,
+    # or one of the four Rejection <stage> reasons.
+    STATUS_COLORS = {
+        "Placement": COLORS["success"],
+        "Progress": COLORS["accent"],
+        "Ghosting": COLORS["danger"],
+        "Rejection Screening CV": COLORS["warning"],
+        "Rejection Interview User": COLORS["warning"],
+        "Rejection Study Case": COLORS["warning"],
+        "Rejection Final Interview": COLORS["warning"],
+    }
+    if len(ts) and "rejection" in ts.columns and ts["rejection"].notna().any():
+        status_counts = ts["rejection"].value_counts().sort_values(ascending=True)
+        bar_colors = [STATUS_COLORS.get(s, CATEGORICAL[0]) for s in status_counts.index]
+        stage_fig = go.Figure(go.Bar(
+            x=status_counts.values, y=status_counts.index, orientation="h",
+            marker_color=bar_colors,
+        ))
+        stage_fig.update_layout(**PLOTLY_LAYOUT, height=220, xaxis_title="Jumlah kandidat")
+    else:
+        stage_fig = empty_fig(220, "Kolom rejection tidak tersedia / kosong")
+
+    return kpi_row, bubble_fig, funnel_fig, priority_table, trend_fig, stage_fig
