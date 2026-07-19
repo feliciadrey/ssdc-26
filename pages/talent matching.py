@@ -201,7 +201,7 @@ filter_bar = html.Div([
 ], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap"})
 
 layout = html.Div([
-    page_header("Talent Matching Management (BT-01, BT-06, BT-08)",
+    page_header("Talent Matching Management",
                 "Cari kandidat paling sesuai kebutuhan perusahaan & pastikan data mahasiswa sinkron"),
     filter_bar,
     html.Div(id="tm-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),

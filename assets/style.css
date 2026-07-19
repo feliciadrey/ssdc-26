@@ -1,0 +1,78 @@
+@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #F2F6F3;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Sidebar nav ---------- */
+.sidebar-link {
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.sidebar-link:hover {
+    background: #EAF2ED;
+    color: #101B14 !important;
+}
+.sidebar-link.active {
+    background: #E1F0E6 !important;
+    color: #0F4A30 !important;
+    font-weight: 600;
+}
+.sidebar-link.active .nav-indicator {
+    background: #1B6B47 !important;
+}
+.sidebar-link.active i {
+    color: #1B6B47;
+}
+
+/* ---------- Cards ---------- */
+.section-card, .kpi-card {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.section-card:hover, .kpi-card:hover {
+    box-shadow: 0 8px 20px rgba(16, 27, 20, 0.08), 0 3px 6px rgba(16, 27, 20, 0.04);
+    transform: translateY(-1px);
+}
+
+/* ---------- Dash DataTable polish ---------- */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.dash-table-container th {
+    font-weight: 650 !important;
+}
+.dash-table-container .dash-cell {
+    border-bottom: 1px solid #EEF3EE !important;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #C7D6CC;
+    border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #A9BFB0;
+}
+
+/* ---------- Links / focus ---------- */
+a {
+    text-decoration: none;
+}
+:focus-visible {
+    outline: 2px solid #1B6B47;
+    outline-offset: 2px;
+}

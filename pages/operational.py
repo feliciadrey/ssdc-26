@@ -12,9 +12,7 @@ dash.register_page(__name__, path="/operational", name="Recruitment Ops")
 
 TODAY = pd.Timestamp(datetime(2026, 7, 18))
 
-# ----------------------------------------------------------------------------
-# Data prep
-# ----------------------------------------------------------------------------
+
 data = load_all()
 tracking_company = data["tracking_company"].copy()
 tracking_student = data["tracking_student"].copy()
@@ -22,10 +20,6 @@ talent_request = data["talent_request"].copy()
 
 
 def _merge_request_detail(tc_df, tr_df):
-    """Bring headcount / minimum_semester / working_arrangement / bidang_studi
-    from talent_request onto tracking_company. Prefers the id_talent_req FK;
-    falls back to matching on (nama_perusahaan, posisi) since that's the join
-    key the rest of this app already relies on."""
     detail_cols = ["headcount", "minimum_semester", "working_arrangement", "bidang_studi_dibutuhkan"]
     if "id_talent_req" in tc_df.columns and "id_talent_req" in tr_df.columns:
         cols = ["id_talent_req"] + [c for c in detail_cols if c in tr_df.columns]
@@ -45,10 +39,6 @@ POSITION_OPTIONS = sorted(s for s in tc["posisi"].dropna().unique())
 WORKING_ARR_OPTIONS = sorted(s for s in tc["working_arrangement"].dropna().unique()) if "working_arrangement" in tc else []
 BIDANG_STUDI_OPTIONS = sorted(s for s in tc["bidang_studi_dibutuhkan"].dropna().unique()) if "bidang_studi_dibutuhkan" in tc else []
 
-
-# ----------------------------------------------------------------------------
-# Helpers
-# ----------------------------------------------------------------------------
 def empty_fig(height=260, message="Tidak ada data untuk filter ini"):
     fig = go.Figure()
     fig.update_layout(**PLOTLY_LAYOUT, height=height)
@@ -78,10 +68,6 @@ def matching_students(d):
     mask = [p in pairs for p in zip(tracking_student["company"], tracking_student["position"])]
     return tracking_student[mask].copy()
 
-
-# ----------------------------------------------------------------------------
-# Static shell
-# ----------------------------------------------------------------------------
 filter_bar = html.Div([
     filter_control("Min Semester", dcc.Dropdown(
         id="op-filter-semester",
@@ -105,12 +91,6 @@ filter_bar = html.Div([
     ), min_width="190px"),
 ], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap"})
 
-# export_button = html.Button(
-#     "Export as PDF", id="op-export-pdf-btn", n_clicks=0,
-#     style={"background": COLORS["accent"], "color": "#FFFFFF", "border": "none", "borderRadius": "8px",
-#            "padding": "10px 16px", "fontSize": "13px", "fontWeight": "600", "cursor": "pointer"},
-# )
-
 bubble_colorby = dcc.Dropdown(
     id="op-bubble-colorby",
     options=[
@@ -127,13 +107,12 @@ ghosting_toggle = dcc.Checklist(
 )
 
 layout = html.Div([
-    page_header("Recruitment Operations (BT-03, BT-02, BT-05)",
+    page_header("Recruitment Operations",
                 "Program manager view · update real-time"),
     html.Div(id="op-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
     html.Div(id="op-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
 
-    # Row 1: Bubble chart / Recruitment funnel / Priority req table
     html.Div([
         section_card("Bubble Chart: Durasi Req vs HeadCount",
                      html.Div(["Ukuran = jumlah diminta · ", bubble_colorby],
@@ -149,7 +128,6 @@ layout = html.Div([
                      style_extra={"flex": "4"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
-    # Row 2: Ghosting trend / Ghosting by selection stage
     html.Div([
         section_card("Ghosting Trend",
                      html.Div(["Per bulan · ", ghosting_toggle],
@@ -163,20 +141,6 @@ layout = html.Div([
 ], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
 
 
-# ----------------------------------------------------------------------------
-# Export as PDF (browser print dialog, same pattern as the Executive Summary page)
-# ----------------------------------------------------------------------------
-# dash.clientside_callback(
-#     "function(n_clicks) { if (n_clicks) { window.print(); } return ''; }",
-#     Output("op-export-pdf-dummy", "children"),
-#     Input("op-export-pdf-btn", "n_clicks"),
-#     prevent_initial_call=True,
-# )
-
-
-# ----------------------------------------------------------------------------
-# Main callback: filters (+ interactive extras) -> KPIs + all charts
-# ----------------------------------------------------------------------------
 @callback(
     Output("op-kpi-row", "children"),
     Output("op-bubble-graph", "figure"),
@@ -214,7 +178,6 @@ def update_ops(min_semester, position, arr, bidang, colorby, ghosting_mode):
                   color=COLORS["danger"], accent=COLORS["danger"]),
     ]
 
-    # ---- Bubble chart: durasi req (aging) vs headcount ----
     if len(d) and "headcount" in d.columns and d["headcount"].notna().any():
         db = d.dropna(subset=["headcount"]).copy()
         db["headcount"] = pd.to_numeric(db["headcount"], errors="coerce")
@@ -236,7 +199,6 @@ def update_ops(min_semester, position, arr, bidang, colorby, ghosting_mode):
     else:
         bubble_fig = empty_fig(260, "Data headcount tidak tersedia untuk filter ini")
 
-    # ---- Recruitment funnel ----
     if len(d) or len(ts):
         total_sent = int(d["jumlah_dikirimkan"].sum()) if len(d) else 0
         stage_counts = ts["progress_student"].value_counts()
@@ -253,7 +215,6 @@ def update_ops(min_semester, position, arr, bidang, colorby, ghosting_mode):
     else:
         funnel_fig = empty_fig(260)
 
-    # ---- Priority req table ----
     if len(d):
         open_d = d[d["is_open"]].copy()
         if len(open_d) and "headcount" in open_d.columns:
@@ -283,8 +244,7 @@ def update_ops(min_semester, position, arr, bidang, colorby, ghosting_mode):
     else:
         priority_table = html.Div("Tidak ada data untuk filter ini.",
                                    style={"fontSize": "12px", "color": COLORS["muted"]})
-
-    # ---- Ghosting trend ----
+        
     ts_ghost = ts[ts["progress_student"] == "Ghosting"]
     if len(ts_ghost) and ts_ghost["last_update"].notna().any():
         by_month = (
@@ -310,13 +270,9 @@ def update_ops(min_semester, position, arr, bidang, colorby, ghosting_mode):
     else:
         trend_fig = empty_fig(220, "Belum ada data ghosting untuk filter ini")
 
-    # ---- Status distribution via tracking_student.rejection ----
-    # This column holds the final status for every tracked student, not a
-    # "which stage did they ghost from" field: Progress, Placement, Ghosting,
-    # or one of the four Rejection <stage> reasons.
     STATUS_COLORS = {
         "Placement": COLORS["success"],
-        "Progress": COLORS["accent"],
+        "On Progress": COLORS["accent"],
         "Ghosting": COLORS["danger"],
         "Rejection Screening CV": COLORS["warning"],
         "Rejection Interview User": COLORS["warning"],

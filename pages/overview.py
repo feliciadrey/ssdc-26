@@ -9,18 +9,12 @@ from utils.components import kpi_card, section_card, page_header, filter_control
 
 dash.register_page(__name__, path="/", name="Executive Summary")
 
-# ----------------------------------------------------------------------------
-# Data prep (runs once at page load; filtering happens in the callback below)
-# ----------------------------------------------------------------------------
 data = load_all()
 tracking_company = data["tracking_company"].copy()
 tracking_student = data["tracking_student"].copy()
 student_all = data["student_all"].copy()
 company = data["company"].copy()
 
-# Bring company sector + kota onto tracking_company via nama_perusahaan
-# (kept consistent with how the rest of the app joins on company name
-# rather than id_company, since that's what the source CSVs support today).
 company_lookup = (
     company.rename(columns={"company_name": "nama_perusahaan"})[
         ["nama_perusahaan", "industry_sector", "kota"]
@@ -31,9 +25,6 @@ tc = tracking_company.merge(company_lookup, on="nama_perusahaan", how="left")
 
 
 def semester_label(d):
-    """Derive an academic-semester label from a date.
-    Aug-Jan -> Ganjil, Feb-Jul -> Genap (adjust here if your institution
-    uses different cutover months)."""
     if pd.isna(d):
         return None
     if d.month >= 8:
@@ -47,13 +38,9 @@ SEMESTER_OPTIONS = sorted(s for s in tc["semester"].dropna().unique())
 SEKTOR_OPTIONS = sorted(s for s in tc["industry_sector"].dropna().unique())
 
 _valid_dates = tc["request_date"].dropna()
-MIN_DATE = _valid_dates.min() if len(_valid_dates) else pd.Timestamp("2024-01-01")
-MAX_DATE = _valid_dates.max() if len(_valid_dates) else pd.Timestamp.today()
+MIN_DATE = _valid_dates.min().date() if len(_valid_dates) else pd.Timestamp("2024-01-01").date()
+MAX_DATE = _valid_dates.max().date() if len(_valid_dates) else pd.Timestamp.today().date()
 
-# Approximate lat/lon for major Indonesian cities/regencies, used to plot the
-# geo map. Extend this dict if your data has cities not covered here — any
-# unmatched city is called out in a caption under the map instead of silently
-# dropped.
 CITY_COORDS = {
     "jakarta": (-6.2088, 106.8456), "dki jakarta": (-6.2088, 106.8456),
     "jakarta selatan": (-6.2615, 106.8106), "jakarta pusat": (-6.1862, 106.8342),
@@ -95,9 +82,6 @@ def city_coord(name):
     return CITY_COORDS.get(key)
 
 
-# ----------------------------------------------------------------------------
-# Helpers
-# ----------------------------------------------------------------------------
 def empty_fig(height=260, message="Tidak ada data untuk filter ini"):
     fig = go.Figure()
     fig.update_layout(**PLOTLY_LAYOUT, height=height)
@@ -121,19 +105,14 @@ def filter_tc(semester, start_date, end_date, sektor):
 
 
 def matching_students(d):
-    """tracking_student rows tied to the companies/positions present in the
-    filtered tracking_company slice `d`."""
     if not len(d):
         return tracking_student.iloc[0:0].copy()
     pairs = set(zip(d["nama_perusahaan"], d["posisi"]))
-    mask = list(zip(tracking_student["company"], tracking_student["position"])) 
+    mask = list(zip(tracking_student["company"], tracking_student["position"]))
     mask = [p in pairs for p in mask]
     return tracking_student[mask].copy()
 
 
-# ----------------------------------------------------------------------------
-# Static shell (filter bar + placeholders that the callback fills in)
-# ----------------------------------------------------------------------------
 filter_bar = html.Div([
     filter_control("Semester", dcc.Dropdown(
         id="ov-filter-semester",
@@ -176,12 +155,11 @@ export_button = html.Button(
 )
 
 layout = html.Div([
-    page_header("Executive Summary (BT-04, BT-07)", "Ringkasan performa placement · seluruh program studi", export_button),
+    page_header("Executive Summary", "Ringkasan performa placement · seluruh program studi", export_button),
     html.Div(id="ov-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
     html.Div(id="ov-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
 
-    # Row 1: Trend / Placement by jenis penempatan / Demografik by kota
     html.Div([
         section_card("Trend: Placement vs Request", "Per bulan",
                      dcc.Graph(id="ov-trend-graph", config={"displayModeBar": False}),
@@ -198,7 +176,6 @@ layout = html.Div([
                      style_extra={"flex": "4"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
-    # Row 2: Top recruiting companies / Success rate by company / Placement by program studi
     html.Div([
         section_card("Top recruiting companies", "Permintaan terbanyak",
                      dcc.Graph(id="ov-top-companies-bar", config={"displayModeBar": False}),
@@ -216,12 +193,6 @@ layout = html.Div([
 ], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
 
 
-# ----------------------------------------------------------------------------
-# Export as PDF: triggers the browser's native print dialog, where the user
-# picks "Save as PDF" as the destination. This avoids adding a server-side
-# PDF-rendering dependency; if you'd rather auto-download a PDF without the
-# print dialog, that needs a headless-rendering service on the backend.
-# ----------------------------------------------------------------------------
 dash.clientside_callback(
     "function(n_clicks) { if (n_clicks) { window.print(); } return ''; }",
     Output("ov-export-pdf-dummy", "children"),
@@ -230,9 +201,6 @@ dash.clientside_callback(
 )
 
 
-# ----------------------------------------------------------------------------
-# Main callback: filters -> KPIs + all charts
-# ----------------------------------------------------------------------------
 @callback(
     Output("ov-kpi-row", "children"),
     Output("ov-trend-graph", "figure"),
@@ -251,7 +219,6 @@ def update_overview(semester, start_date, end_date, sektor):
     d = filter_tc(semester, start_date, end_date, sektor)
     ts = matching_students(d)
 
-    # ---- KPIs ----
     active_req = int((d["jumlah_dikirimkan"] < d["jumlah_permintaan"]).sum()) if len(d) else 0
     total_placed = int((ts["progress_student"] == "Placement").sum())
     placement_rate = round(100 * total_placed / len(ts), 1) if len(ts) else 0
@@ -271,15 +238,14 @@ def update_overview(semester, start_date, end_date, sektor):
     kpi_row = [
         kpi_card("Active request", f"{active_req}", "Belum sepenuhnya terpenuhi"),
         kpi_card("Total placement", f"{total_placed}", "Kandidat berhasil ditempatkan",
-                  color=COLORS["success"], accent=COLORS["success"]),
+                 color=COLORS["success"], accent=COLORS["success"]),
         kpi_card("Placement rate", f"{placement_rate}%", "Target 45%",
-                  color=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
-                  accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"]),
+                 color=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
+                 accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"]),
         kpi_card("Avg time to placement", f"{avg_time} hari" if avg_time is not None else "-",
-                  "Request date -> placement update"),
+                 "Request date -> placement update"),
     ]
 
-    # ---- Trend: placement vs request, by month ----
     if len(d):
         req_by_month = (
             d.dropna(subset=["request_date"])
@@ -315,7 +281,6 @@ def update_overview(semester, start_date, end_date, sektor):
     else:
         trend_fig = empty_fig(260)
 
-    # ---- Placement by jenis penempatan ----
     if len(ts) and ts["jenis_penempatan"].notna().any():
         jenis_counts = ts["jenis_penempatan"].value_counts()
         jenis_fig = go.Figure(go.Pie(
@@ -323,11 +288,10 @@ def update_overview(semester, start_date, end_date, sektor):
             marker=dict(colors=CATEGORICAL), hole=0.4,
         ))
         jenis_fig.update_layout(**PLOTLY_LAYOUT, height=260, showlegend=True,
-                                 legend=dict(orientation="h", y=-0.15, font=dict(size=10)))
+                               legend=dict(orientation="h", y=-0.15, font=dict(size=10)))
     else:
         jenis_fig = empty_fig(260)
 
-    # ---- Demografik by kota (geo map) ----
     kota_caption = ""
     if len(d) and d["kota"].notna().any():
         kota_counts = (
@@ -386,7 +350,6 @@ def update_overview(semester, start_date, end_date, sektor):
     else:
         kota_fig = empty_fig(280)
 
-    # ---- Top recruiting companies ----
     if len(d):
         top_companies = (
             d.groupby("nama_perusahaan")["jumlah_permintaan"].sum()
@@ -401,7 +364,6 @@ def update_overview(semester, start_date, end_date, sektor):
     else:
         top_fig = empty_fig(280)
 
-    # ---- Success rate by company ----
     if len(d):
         comp_summary = d.groupby("nama_perusahaan").agg(dikirim=("jumlah_dikirimkan", "sum")).reset_index()
         placed_counts = (
@@ -422,7 +384,6 @@ def update_overview(semester, start_date, end_date, sektor):
     else:
         rate_fig = empty_fig(280)
 
-    # ---- Placement distribution by program studi ----
     if len(ts):
         ts_prodi = ts.merge(student_all[["NIM", "program_studi"]], on="NIM", how="left")
         prodi_counts = (
@@ -444,9 +405,6 @@ def update_overview(semester, start_date, end_date, sektor):
     return kpi_row, trend_fig, jenis_fig, kota_fig, kota_caption, top_fig, rate_fig, prodi_fig
 
 
-# ----------------------------------------------------------------------------
-# Drill-down: click a program studi bar -> list students in that program
-# ----------------------------------------------------------------------------
 @callback(
     Output("ov-prodi-detail", "children"),
     Input("ov-prodi-bar", "clickData"),
