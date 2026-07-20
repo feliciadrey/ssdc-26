@@ -340,7 +340,7 @@ def update_matching(prodi, position, arr, semester, domisili, ipk_range):
         doc_counts = d["doc_complete"].map({True: "Lengkap", False: "Kurang Lengkap"}).value_counts()
         doc_fig = go.Figure(go.Pie(
             labels=doc_counts.index, values=doc_counts.values, hole=0.55,
-            marker=dict(colors=[COLORS["success"], COLORS["warning"]]),
+            marker=dict(colors=[COLORS["primary_dark"], CATEGORICAL[0]]),
         ))
         doc_fig.update_layout(**PLOTLY_LAYOUT, height=240, showlegend=True,
                                legend=dict(orientation="h", y=-0.2, font=dict(size=9)))
@@ -352,8 +352,8 @@ def update_matching(prodi, position, arr, semester, domisili, ipk_range):
         sync_counts = d["sync_bucket"].value_counts()
         order = ["Up to Date", "Perlu Update", "Outdated", "Belum Sync"]
         sync_counts = sync_counts.reindex(order).dropna()
-        sync_colors = {"Up to Date": COLORS["success"], "Perlu Update": COLORS["warning"],
-                       "Outdated": COLORS["danger"], "Belum Sync": COLORS["muted"]}
+        sync_colors = {"Up to Date": COLORS["success"], "Perlu Update": COLORS["primary_soft"],
+                       "Outdated": COLORS["primary_dark"], "Belum Sync": CATEGORICAL[0]}
         sync_fig = go.Figure(go.Bar(
             x=sync_counts.index, y=sync_counts.values,
             marker_color=[sync_colors.get(s, CATEGORICAL[0]) for s in sync_counts.index],
@@ -376,9 +376,9 @@ def update_matching(prodi, position, arr, semester, domisili, ipk_range):
     # ---- IPK distribution ----
     ipk_numeric = pd.to_numeric(d["ipk"], errors="coerce").dropna() if len(d) else pd.Series(dtype=float)
     if len(ipk_numeric):
-        ipk_fig = go.Figure(go.Histogram(x=ipk_numeric, nbinsx=20, marker_color=COLORS["accent"]))
+        ipk_fig = go.Figure(go.Histogram(x=ipk_numeric, nbinsx=20, marker_color=COLORS["primary"]))
         if ipk_range:
-            ipk_fig.add_vline(x=ipk_range[0], line_dash="dot", line_color=COLORS["danger"])
+            ipk_fig.add_vline(x=ipk_range[0], line_dash="dot", line_color=COLORS["primary_dark"])
         ipk_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="IPK", yaxis_title="Jumlah mahasiswa")
     else:
         ipk_fig = empty_fig()
@@ -389,7 +389,7 @@ def update_matching(prodi, position, arr, semester, domisili, ipk_range):
         dom_counts = dom_pool["domisili"].value_counts().sort_values(ascending=True).tail(10)
         dom_fig = go.Figure(go.Bar(
             x=dom_counts.values, y=dom_counts.index, orientation="h",
-            marker_color=COLORS["accent"],
+            marker_color=COLORS["primary_soft"],
         ))
         dom_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="Jumlah mahasiswa eligible")
     else:

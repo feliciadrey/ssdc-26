@@ -107,6 +107,10 @@ def filter_tc(semester, start_date, end_date, sektor):
 def matching_students(d):
     if not len(d):
         return tracking_student.iloc[0:0].copy()
+    if "id_tracking_company" in d.columns and "id_tracking_company" in tracking_student.columns:
+        ids = set(d["id_tracking_company"])
+        return tracking_student[tracking_student["id_tracking_company"].isin(ids)].copy()
+    # fallback for datasets missing the FK column - can over-match on recurring postings
     pairs = set(zip(d["nama_perusahaan"], d["posisi"]))
     mask = list(zip(tracking_student["company"], tracking_student["position"]))
     mask = [p in pairs for p in mask]
@@ -143,7 +147,7 @@ export_button = html.Button(
     id="ov-export-pdf-btn",
     n_clicks=0,
     style={
-        "background": COLORS["accent"],
+        "background": COLORS["primary"],
         "color": "#FFFFFF",
         "border": "none",
         "borderRadius": "8px",
@@ -219,8 +223,9 @@ def update_overview(semester, start_date, end_date, sektor):
     d = filter_tc(semester, start_date, end_date, sektor)
     ts = matching_students(d)
 
-    active_req = int((d["jumlah_dikirimkan"] < d["jumlah_permintaan"]).sum()) if len(d) else 0
+    total_requested = int(d["jumlah_permintaan"].sum()) if len(d) else 0
     total_placed = int((ts["progress_student"] == "Placement").sum())
+    fulfillment_rate = min(round(100 * total_placed / total_requested, 1), 100.0) if total_requested else 0
     placement_rate = round(100 * total_placed / len(ts), 1) if len(ts) else 0
 
     ts_placed = ts[ts["progress_student"] == "Placement"]
@@ -236,10 +241,12 @@ def update_overview(semester, start_date, end_date, sektor):
             avg_time = round(deltas.mean(), 1)
 
     kpi_row = [
-        kpi_card("Active request", f"{active_req}", "Belum sepenuhnya terpenuhi"),
+        kpi_card("Fulfillment rate", f"{fulfillment_rate}%", "Posisi terisi vs total headcount diminta",
+                 color=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"],
+                 accent=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"]),
         kpi_card("Total placement", f"{total_placed}", "Kandidat berhasil ditempatkan",
                  color=COLORS["success"], accent=COLORS["success"]),
-        kpi_card("Placement rate", f"{placement_rate}%", "Target 45%",
+        kpi_card("Conversion rate", f"{placement_rate}%", "Placement dari kandidat yang diproses",
                  color=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
                  accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"]),
         kpi_card("Avg time to placement", f"{avg_time} hari" if avg_time is not None else "-",
@@ -270,12 +277,12 @@ def update_overview(semester, start_date, end_date, sektor):
         trend_fig.add_trace(go.Scatter(
             x=month_labels, y=[req_by_month.get(m, 0) for m in months],
             mode="lines+markers", name="Request",
-            line=dict(color=COLORS["accent"], width=2),
+            line=dict(color=COLORS["primary_dark"], width=2),
         ))
         trend_fig.add_trace(go.Scatter(
             x=month_labels, y=[placed_by_month.get(m, 0) for m in months],
             mode="lines+markers", name="Placement",
-            line=dict(color=COLORS["success"], width=2),
+            line=dict(color=COLORS["primary_soft"], width=2),
         ))
         trend_fig.update_layout(**PLOTLY_LAYOUT, height=260, legend=dict(orientation="h", y=-0.25))
     else:
@@ -318,7 +325,7 @@ def update_overview(semester, start_date, end_date, sektor):
                     size=marker_sizes,
                     color=CATEGORICAL[1],
                     opacity=0.75,
-                    line=dict(width=1, color=COLORS["accent"]),
+                    line=dict(width=1, color=COLORS["primary_dark"]),
                 ),
             ))
             kota_fig.update_geos(
