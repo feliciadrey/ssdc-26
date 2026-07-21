@@ -176,7 +176,7 @@ ipk_slider = html.Div([
         value=[ipk_lo, ipk_hi],
         marks=ipk_marks,
         allowCross=False,
-        tooltip={"placement": "top", "always_visible": True},
+        tooltip={"placement": "top", "always_visible": False},
     ),
 ], style={
     "background": COLORS["surface"], "border": f"1px solid {COLORS['border_soft']}",
@@ -225,11 +225,11 @@ layout = html.Div([
     page_header("Talent Matching Management",
                 "Cari kandidat paling sesuai kebutuhan perusahaan & pastikan data mahasiswa sinkron"),
     filter_bar,
-    html.Div(id="tm-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
+    html.Div(id="tm-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
 
     html.Div([
         section_card("Ranked Candidate Matches", "Skor = prodi + semester + IPK + domisili + ketersediaan + tools. Tambahkan filter Tools / Skills di atas untuk saring kandidat.",
-                     html.Div(id="tm-match-table"),
+                     html.Div(id="tm-match-table", style={"maxHeight": "460px", "overflowY": "auto"}),
                      style_extra={"flex": "1"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 

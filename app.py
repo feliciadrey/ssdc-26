@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc
+from dash import html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 
 from utils.theme import COLORS, SIDEBAR_WIDTH, SHADOW_SM
@@ -19,7 +19,7 @@ NAV_ITEMS = [
 ]
 
 
-def nav_link(label, href, icon):
+def nav_link(label, href, icon, link_id):
     return dcc.Link(
         html.Div([
             html.Div(style={
@@ -30,6 +30,7 @@ def nav_link(label, href, icon):
             html.Span(label, style={"fontSize": "13px", "fontWeight": "500"}),
         ], style={"display": "flex", "alignItems": "center"}),
         href=href,
+        id=link_id,
         className="sidebar-link",
         style={
             "display": "block", "padding": "10px 14px", "borderRadius": "10px",
@@ -66,7 +67,7 @@ sidebar = html.Div([
             "fontSize": "9.5px", "fontWeight": "700", "color": COLORS["muted_light"],
             "letterSpacing": "0.08em", "padding": "0 14px", "marginBottom": "8px", "marginTop": "4px",
         }),
-        html.Div([nav_link(label, href, icon) for label, href, icon in NAV_ITEMS]),
+        html.Div([nav_link(label, href, icon, f"nav-link-{i}") for i, (label, href, icon) in enumerate(NAV_ITEMS)]),
     ], style={"padding": "16px 10px"}),
 
     html.Div([
@@ -100,6 +101,17 @@ app.layout = html.Div([
     sidebar,
     content,
 ], style={"fontFamily": "Inter, -apple-system, sans-serif"})
+
+@callback(
+    [Output(f"nav-link-{i}", "className") for i in range(len(NAV_ITEMS))],
+    Input("url", "pathname"),
+)
+def highlight_active_nav(pathname):
+    return [
+        "sidebar-link active" if href == pathname else "sidebar-link"
+        for _, href, _ in NAV_ITEMS
+    ]
+
 
 if __name__ == "__main__":
     app.run(debug=False, port=8052)

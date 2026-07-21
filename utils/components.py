@@ -16,7 +16,7 @@ def _icon_badge(icon, bg, fg):
 def kpi_card(label, value, sub=None, color=COLORS["text"], accent=None, icon="bi bi-graph-up", trend=None):
     """KPI card with icon badge, big number, and an optional trend pill."""
     style = dict(CARD_STYLE)
-    style.update({"flex": "1", "minWidth": "0", "className": "kpi-card"})
+    style.update({"flex": "1", "minWidth": "180px", "className": "kpi-card"})
 
     trend_pill = None
     if trend:
@@ -65,9 +65,9 @@ def section_card(title, subtitle, children, style_extra=None, icon="bi bi-bar-ch
         _icon_badge(icon, (accent + "1A") if accent else COLORS["primary_light"], accent or COLORS["primary"]),
         html.Div([
             html.Div(title, style={"fontSize": "13.5px", "fontWeight": "650", "color": COLORS["text"]}),
-            subtitle_el,
-        ]),
-    ], style={"display": "flex", "alignItems": "center", "gap": "10px", "marginBottom": "12px"})
+            html.Div(subtitle_el, style={"minHeight": "18px", "display": "flex", "alignItems": "center"}),
+        ], style={"minWidth": "0", "flex": "1"}),
+    ], style={"display": "flex", "alignItems": "flex-start", "gap": "10px", "marginBottom": "12px"})
 
     return html.Div([title_row, children], className="section-card", style=style)
 

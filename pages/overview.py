@@ -140,7 +140,7 @@ filter_bar = html.Div([
         clearable=True,
         style={"minWidth": "200px", "border": "none"},
     )),
-], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap"})
+], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap", "alignItems": "flex-start"})
 
 export_button = html.Button(
     "Export as PDF",
@@ -162,7 +162,7 @@ layout = html.Div([
     page_header("Executive Summary", "Ringkasan performa placement · seluruh program studi", export_button),
     html.Div(id="ov-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
-    html.Div(id="ov-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
+    html.Div(id="ov-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
 
     html.Div([
         section_card("Trend: Placement vs Request", "Per bulan",
@@ -190,7 +190,8 @@ layout = html.Div([
         section_card("Placement by program studi", "Klik bar untuk detail mahasiswa",
                      html.Div([
                          dcc.Graph(id="ov-prodi-bar", config={"displayModeBar": False}),
-                         html.Div(id="ov-prodi-detail", style={"marginTop": "8px"}),
+                         html.Div(id="ov-prodi-detail",
+                                   style={"marginTop": "8px", "maxHeight": "180px", "overflowY": "auto"}),
                      ]),
                      style_extra={"flex": "4"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
@@ -284,9 +285,9 @@ def update_overview(semester, start_date, end_date, sektor):
             mode="lines+markers", name="Placement",
             line=dict(color=COLORS["primary_soft"], width=2),
         ))
-        trend_fig.update_layout(**PLOTLY_LAYOUT, height=260, legend=dict(orientation="h", y=-0.25))
+        trend_fig.update_layout(**PLOTLY_LAYOUT, height=280, legend=dict(orientation="h", y=-0.25))
     else:
-        trend_fig = empty_fig(260)
+        trend_fig = empty_fig(280)
 
     if len(ts) and ts["jenis_penempatan"].notna().any():
         jenis_counts = ts["jenis_penempatan"].value_counts()
@@ -294,10 +295,10 @@ def update_overview(semester, start_date, end_date, sektor):
             labels=jenis_counts.index, values=jenis_counts.values,
             marker=dict(colors=CATEGORICAL), hole=0.4,
         ))
-        jenis_fig.update_layout(**PLOTLY_LAYOUT, height=260, showlegend=True,
+        jenis_fig.update_layout(**PLOTLY_LAYOUT, height=280, showlegend=True,
                                legend=dict(orientation="h", y=-0.15, font=dict(size=10)))
     else:
-        jenis_fig = empty_fig(260)
+        jenis_fig = empty_fig(280)
 
     kota_caption = ""
     if len(d) and d["kota"].notna().any():
