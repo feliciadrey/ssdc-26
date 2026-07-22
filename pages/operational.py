@@ -104,7 +104,7 @@ ghosting_toggle = dcc.Checklist(
 
 layout = html.Div([
     page_header("Recruitment Operations",
-                "Program manager view · update real-time"),
+                "Live Operations Tracking"),
     html.Div(id="op-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
     html.Div(id="op-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
@@ -132,7 +132,7 @@ layout = html.Div([
             html.Div([
                 html.Span("Kandidat belum merespons, per level follow-up"),
                 dbc.Button(
-                    "View Actionable FU List ↗",
+                    "View Follow-Up List ↗",
                     id="op-ghosting-open-link",
                     color="primary",
                     outline=True,
@@ -155,7 +155,7 @@ layout = html.Div([
         # html.Span("Klik untuk melihat daftar actionable candidate ghosting.", style={"color": COLORS["muted"], "marginLeft": "12px", "fontSize": "12px"}),
     ], style={"display": "flex", "alignItems": "center", "marginTop": "14px", "marginBottom": "20px"}),
     dbc.Modal([
-        dbc.ModalHeader("Actionable Ghosting Follow-Up List"),
+        dbc.ModalHeader("Ghosting Follow-Up List"),
         dbc.ModalBody([
             html.Div(
                 "Daftar mahasiswa dan perusahaan di status Ghosting untuk tim CDC follow up segera.",
@@ -218,11 +218,11 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
     followup_count = int(ts["progress_student"].isin(FOLLOWUP_STAGES).sum()) if len(ts) else 0
 
     kpi_row = [
-        kpi_card("Open Request", f"{open_request}", "Belum sepenuhnya terpenuhi"),
+        kpi_card("Open Request", f"{open_request}", "Total posisi yang belum terpenuhi"),
         kpi_card("Average Processing Time",
                   f"{avg_processing} hari" if avg_processing is not None else "-",
-                  "Request date -> send date"),
-        kpi_card("Perlu Follow-up", f"{followup_count}", "Kandidat FU 1-3, sebelum berstatus Ghosting",
+                  "Durasi dari pengajuan hingga pengiriman"),
+        kpi_card("Perlu Follow-up", f"{followup_count}", "Kandidat aktif dalam tahap FU 1-3",
                   color=COLORS["warning"] if followup_count > 0 else COLORS["text"],
                   accent=COLORS["warning"] if followup_count > 0 else None),
         kpi_card("Jumlah Ghosting", f"{ghosting_count}", "Perlu eskalasi",
@@ -355,18 +355,17 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
     Output("op-ghosting-modal-alert", "children"),
     Output("op-ghosting-modal-alert", "is_open"),
     Input("op-ghosting-open-link", "n_clicks"),
-    Input("op-ghosting-open-link-2", "n_clicks"),
     Input("op-ghosting-modal-close", "n_clicks"),
     Input("op-ghosting-followup-btn", "n_clicks"),
     State("op-ghosting-modal", "is_open"),
 )
-def toggle_ghosting_modal(open_clicks, open_clicks_2, close_clicks, followup_clicks, is_open):
+def toggle_ghosting_modal(open_clicks, close_clicks, followup_clicks, is_open):
     ctx = dash.callback_context
     if not ctx.triggered:
         return False, "", False
 
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    if trigger_id in {"op-ghosting-open-link", "op-ghosting-open-link-2"}:
+    if trigger_id == "op-ghosting-open-link":
         return True, "", False
     if trigger_id == "op-ghosting-modal-close":
         return False, "", False
