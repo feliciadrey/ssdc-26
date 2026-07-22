@@ -1,5 +1,6 @@
 import dash
-from dash import html, dcc, dash_table, Input, Output, callback
+from dash import html, dcc, dash_table, Input, Output, State, callback
+import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
@@ -93,7 +94,7 @@ filter_bar = html.Div([
         options=[{"label": s, "value": s} for s in BIDANG_STUDI_OPTIONS],
         placeholder="Semua bidang", clearable=True, style={"minWidth": "170px", "border": "none"},
     ), min_width="190px"),
-], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap", "alignItems": "flex-start"})
+], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap"})
 
 ghosting_toggle = dcc.Checklist(
     id="op-ghosting-cumulative",
@@ -106,7 +107,7 @@ layout = html.Div([
                 "Program manager view · update real-time"),
     html.Div(id="op-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
-    html.Div(id="op-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
+    html.Div(id="op-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
 
     html.Div([
         section_card("Distribusi Progress Request", "Status pengiriman saat ini, per jenis penempatan",
@@ -116,7 +117,7 @@ layout = html.Div([
                      dcc.Graph(id="op-funnel-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "4"}),
         section_card("Priority Req Table", "Skor = usia request x headcount, top 10 masih terbuka",
-                     html.Div(id="op-priority-table", style={"height": "260px", "overflowY": "auto"}),
+                     html.Div(id="op-priority-table"),
                      style_extra={"flex": "4"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
@@ -128,10 +129,64 @@ layout = html.Div([
                      style_extra={"flex": "6"}),
         section_card(
             "Eskalasi Follow-Up ke Ghosting",
-            "Kandidat belum merespons, per level follow-up",
+            html.Div([
+                html.Span("Kandidat belum merespons, per level follow-up"),
+                dbc.Button(
+                    "View Actionable FU List ↗",
+                    id="op-ghosting-open-link",
+                    color="primary",
+                    outline=True,
+                    size="sm",
+                    n_clicks=0,
+                    style={"padding": "6px 12px", "fontSize": "12px", "lineHeight": "1.2"},
+                ),
+            ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "10px"}),
             dcc.Graph(id="op-ghosting-stage-graph", config={"displayModeBar": False}),
             style_extra={"flex": "6"}),
     ], style={"display": "flex", "gap": "12px"}),
+    html.Div([
+        # dbc.Button(
+        #     "Buka Daftar Follow-Up Ghosting",
+        #     id="op-ghosting-open-link-2",
+        #     color="primary",
+        #     n_clicks=0,
+        #     style={"fontSize": "13px", "padding": "10px 18px"},
+        # ),
+        # html.Span("Klik untuk melihat daftar actionable candidate ghosting.", style={"color": COLORS["muted"], "marginLeft": "12px", "fontSize": "12px"}),
+    ], style={"display": "flex", "alignItems": "center", "marginTop": "14px", "marginBottom": "20px"}),
+    dbc.Modal([
+        dbc.ModalHeader("Actionable Ghosting Follow-Up List"),
+        dbc.ModalBody([
+            html.Div(
+                "Daftar mahasiswa dan perusahaan di status Ghosting untuk tim CDC follow up segera.",
+                style={"marginBottom": "12px", "color": COLORS["muted"]},
+            ),
+            dbc.Alert(id="op-ghosting-modal-alert", color="success", is_open=False, style={"marginBottom": "16px"}),
+            dash_table.DataTable(
+                id="op-ghosting-detail-table",
+                columns=[
+                    {"name": "NIM", "id": "NIM"},
+                    {"name": "Nama", "id": "student_name"},
+                    {"name": "Perusahaan", "id": "company"},
+                    {"name": "Posisi", "id": "position"},
+                    {"name": "Last Update", "id": "last_update"},
+                    {"name": "Rejection / Catatan", "id": "rejection"},
+                ],
+                data=[],
+                page_size=10,
+                sort_action="native",
+                filter_action="native",
+                style_as_list_view=True,
+                style_header={"backgroundColor": COLORS["surface"], "fontWeight": "600", "fontSize": "11px",
+                              "borderBottom": f"1px solid {COLORS['border']}"},
+                style_cell={"fontSize": "11px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif", "whiteSpace": "normal"},
+            ),
+        ]),
+        dbc.ModalFooter([
+            dbc.Button("Mark Follow-Up Done", id="op-ghosting-followup-btn", color="primary", n_clicks=0),
+            dbc.Button("Close", id="op-ghosting-modal-close", color="secondary", className="ms-2", n_clicks=0),
+        ]),
+    ], id="op-ghosting-modal", size="xl", is_open=False, backdrop="static"),
 ], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
 
 
@@ -142,6 +197,7 @@ layout = html.Div([
     Output("op-priority-table", "children"),
     Output("op-ghosting-trend-graph", "figure"),
     Output("op-ghosting-stage-graph", "figure"),
+    Output("op-ghosting-detail-table", "data"),
     Input("op-filter-semester", "value"),
     Input("op-filter-position", "value"),
     Input("op-filter-arr", "value"),
@@ -266,6 +322,13 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
     else:
         trend_fig = empty_fig(220, "Belum ada data ghosting untuk filter ini")
 
+    if len(ts_ghost):
+        ghosting_detail_data = ts_ghost[["NIM", "student_name", "company", "position", "last_update", "rejection"]].copy()
+        ghosting_detail_data["last_update"] = ghosting_detail_data["last_update"].dt.strftime("%Y-%m-%d")
+        ghosting_detail_data = ghosting_detail_data.to_dict("records")
+    else:
+        ghosting_detail_data = []
+
     FU_STAGES = ["FU 1", "FU 2", "FU 3", "Ghosting"]
     FU_COLORS = {
         "FU 1": CATEGORICAL[0],
@@ -284,4 +347,30 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
     else:
         stage_fig = empty_fig(220, "Belum ada kandidat di tahap follow-up untuk filter ini")
 
-    return kpi_row, bubble_fig, funnel_fig, priority_table, trend_fig, stage_fig
+    return kpi_row, bubble_fig, funnel_fig, priority_table, trend_fig, stage_fig, ghosting_detail_data
+
+
+@callback(
+    Output("op-ghosting-modal", "is_open"),
+    Output("op-ghosting-modal-alert", "children"),
+    Output("op-ghosting-modal-alert", "is_open"),
+    Input("op-ghosting-open-link", "n_clicks"),
+    Input("op-ghosting-open-link-2", "n_clicks"),
+    Input("op-ghosting-modal-close", "n_clicks"),
+    Input("op-ghosting-followup-btn", "n_clicks"),
+    State("op-ghosting-modal", "is_open"),
+)
+def toggle_ghosting_modal(open_clicks, open_clicks_2, close_clicks, followup_clicks, is_open):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return False, "", False
+
+    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    if trigger_id in {"op-ghosting-open-link", "op-ghosting-open-link-2"}:
+        return True, "", False
+    if trigger_id == "op-ghosting-modal-close":
+        return False, "", False
+    if trigger_id == "op-ghosting-followup-btn":
+        return True, "Follow-up berhasil dicatat. Tim CDC dapat melanjutkan panggilan.", True
+
+    return is_open, "", False

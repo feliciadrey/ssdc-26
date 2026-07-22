@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc, dash_table, Input, Output, callback
+from dash import html, dcc, dash_table, Input, Output, State, callback
 import plotly.graph_objects as go
 import pandas as pd
 import re
@@ -18,9 +18,20 @@ student_all = data["student_all"].copy()
 status_student = data["status_student"].copy()
 talent_request = data["talent_request"].copy()
 company = data["company"].copy()
+tracking_student = data["tracking_student"].copy()
 
-for _df in (student_all, status_student, talent_request, company):
+for _df in (student_all, status_student, talent_request, company, tracking_student):
     _df.columns = _df.columns.str.strip().str.lower()
+
+tracking_student["last_update"] = pd.to_datetime(tracking_student["last_update"], errors="coerce")
+# Most recent moment each student's data was actually relied on in a live
+# selection process at a company — used to check whether sync_date kept up.
+last_activity_by_nim = tracking_student.groupby("nim")["last_update"].max()
+# Status of that most recent tracking record — tells us if a student is
+# currently mid-process ("On Progress") or free again (Placement / Rejection
+# / Ghosting) once tracking activity is done.
+_tracking_sorted = tracking_student.dropna(subset=["last_update"]).sort_values("last_update")
+latest_rejection_by_nim = _tracking_sorted.groupby("nim")["rejection"].last()
 
 company_lookup = company.rename(columns={"company_name": "nama_perusahaan"})[
     ["nama_perusahaan", "kota"]
@@ -37,9 +48,11 @@ sp["semester"] = pd.to_numeric(sp["semester_status"], errors="coerce").fillna(
 )
 sp["is_synced"] = sp["sync_date"].notna()
 
-_valid_sync = sp["sync_date"].dropna()
-REF_SYNC_DATE = _valid_sync.max() if len(_valid_sync) else TODAY
-sp["days_since_sync"] = (REF_SYNC_DATE - sp["sync_date"]).dt.days
+STALE_WEEKS = 7
+STALE_DAYS = STALE_WEEKS * 7
+
+sp["last_activity_date"] = sp["nim"].map(last_activity_by_nim)
+sp["activity_gap_days"] = (sp["last_activity_date"] - sp["sync_date"]).dt.days
 
 sp["doc_complete"] = (
     sp["cv"].astype(str).str.strip().str.lower().eq("ada")
@@ -50,21 +63,41 @@ sp["is_active"] = sp["status"].astype(str).str.strip().str.lower().eq("active")
 sp["is_eligible"] = sp["is_active"] & sp["doc_complete"] & sp["ipk"].notna()
 
 
+def is_available_status(value):
+    text = str(value).lower()
+    return any(k in text for k in ["siap", "tersedia", "available", "ready"])
+
+
+sp["is_available"] = sp["ketersediaan"].apply(is_available_status) if "ketersediaan" in sp else False
+sp["latest_rejection_status"] = sp["nim"].map(latest_rejection_by_nim)
+
+
 def sync_bucket(row):
     if not row["is_synced"]:
         return "Belum Sync"
-    if row["days_since_sync"] <= 7:
-        return "Up to Date"
-    if row["days_since_sync"] <= 30:
-        return "Perlu Update"
-    return "Outdated"
+    if pd.isna(row["last_activity_date"]):
+        # Never appeared in tracking_student — nothing to compare sync_date
+        # against, so freshness can't be assessed for this student.
+        return "Belum Ditrack"
+    gap = row["activity_gap_days"]
+    if gap <= 0:
+        # sync_date is at/after their last tracking activity — profile was
+        # (re)synced no earlier than the moment it was actually used. Good.
+        return "Sync Setelah Aktivitas"
+    if gap <= STALE_DAYS:
+        return f"Selaras (<= {STALE_WEEKS} minggu)"
+    return f"Stale (> {STALE_WEEKS} minggu)"
 
 
 sp["sync_bucket"] = sp.apply(sync_bucket, axis=1)
 
+# Buckets considered "in sync" for KPI / funnel purposes.
+GOOD_SYNC_BUCKETS = {"Sync Setelah Aktivitas", f"Selaras (<= {STALE_WEEKS} minggu)"}
+
 PRODI_OPTIONS = sorted(s for s in sp["program_studi"].dropna().unique())
 POSITION_OPTIONS = sorted(s for s in tr["nama_posisi"].dropna().unique())
 WORKING_ARR_OPTIONS = sorted(s for s in tr["working_arrangement"].dropna().unique()) if "working_arrangement" in tr else []
+COMPANY_OPTIONS = sorted(s for s in company["company_name"].dropna().unique()) if "company_name" in company else []
 SEMESTER_OPTIONS = sorted(int(s) for s in sp["semester"].dropna().unique())
 DOMISILI_OPTIONS = sorted(s for s in sp["domisili"].dropna().unique()) if "domisili" in sp else []
 
@@ -151,6 +184,51 @@ def match_score(row, req):
     return round(score, 1)
 
 
+TABLE_COLUMNS = [
+    {"name": "NIM", "id": "nim"},
+    {"name": "Nama", "id": "nama_status"},
+    {"name": "Prodi", "id": "program_studi"},
+    {"name": "Semester", "id": "semester"},
+    {"name": "IPK", "id": "ipk"},
+    {"name": "Domisili", "id": "domisili"},
+    {"name": "Tools", "id": "tools"},
+]
+TABLE_FIELDS = ["nim", "nama_status", "program_studi", "semester", "ipk", "domisili", "tools"]
+
+
+def build_match_table(dt, selected_ids=None, sent_nims=None):
+    """Build the Ranked Candidate Matches table with a left-hand checkbox
+    column (row_selectable). Candidates already sent to the currently
+    selected target company are dropped from the list entirely — once
+    sent, they're off the queue. selected_ids / sent_nims are lists of
+    NIM strings, kept in dcc.Store so they survive the table being
+    rebuilt whenever filters change."""
+    selected_ids = selected_ids or []
+    sent_nims = set(sent_nims or [])
+
+    dt = dt[~dt["nim"].isin(sent_nims)] if len(dt) else dt
+    records = dt[TABLE_FIELDS].fillna("-").to_dict("records")
+    for rec in records:
+        # "id" here is the row_id dash_table uses for selected_row_ids —
+        # it doesn't need to be a visible column, just present in the dict.
+        rec["id"] = rec["nim"]
+
+    return dash_table.DataTable(
+        id="tm-match-datatable",
+        columns=TABLE_COLUMNS,
+        data=records,
+        row_selectable="multi",
+        selected_row_ids=[i for i in selected_ids if i in {r["nim"] for r in records}],
+        style_as_list_view=True,
+        sort_action="native",
+        page_action="native",
+        page_size=15,
+        style_header={"backgroundColor": COLORS["surface"], "fontWeight": "600", "fontSize": "11px",
+                      "borderBottom": f"1px solid {COLORS['border']}"},
+        style_cell={"fontSize": "11px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif"},
+    )
+
+
 # ----------------------------------------------------------------------------
 # IPK slider — needs to visually communicate "this IS the full data range,
 # both ends draggable" from the very first render, without requiring a hover.
@@ -228,28 +306,48 @@ layout = html.Div([
     html.Div(id="tm-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
 
     html.Div([
-        section_card("Ranked Candidate Matches", "Skor = prodi + semester + IPK + domisili + ketersediaan + tools. Tambahkan filter Tools / Skills di atas untuk saring kandidat.",
-                     html.Div(id="tm-match-table", style={"maxHeight": "460px", "overflowY": "auto"}),
-                     style_extra={"flex": "1"}),
+        section_card(
+            "Ranked Candidate Matches",
+            "Hanya kandidat eligible & available. Centang kandidat, pilih perusahaan tujuan, lalu Kirim. Klik header untuk sort, 15 baris/halaman.",
+            html.Div([
+                html.Div([
+                    dcc.Dropdown(
+                        id="tm-send-company",
+                        options=[{"label": c, "value": c} for c in COMPANY_OPTIONS],
+                        placeholder="Pilih perusahaan tujuan...",
+                        clearable=True,
+                        style={"minWidth": "260px"},
+                    ),
+                    html.Button("Kirim ke Perusahaan", id="tm-send-btn", n_clicks=0, style={
+                        "background": COLORS["primary_dark"], "color": "#fff", "border": "none",
+                        "borderRadius": "8px", "padding": "8px 16px", "fontSize": "12px",
+                        "fontWeight": "600", "cursor": "pointer",
+                    }),
+                    html.Div(id="tm-send-feedback", style={"fontSize": "11px", "color": COLORS["muted"],
+                                                            "alignSelf": "center"}),
+                ], style={"display": "flex", "gap": "10px", "alignItems": "center", "marginBottom": "10px",
+                          "flexWrap": "wrap"}),
+                html.Div(id="tm-match-table", style={"maxHeight": "460px", "overflowY": "auto"}),
+                dcc.Store(id="tm-selected-store", data=[]),
+                dcc.Store(id="tm-sent-store", data=[]),
+            ]),
+            style_extra={"flex": "1"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
     html.Div([
         section_card("Document Completeness", "CV + portofolio lengkap vs kurang",
                      dcc.Graph(id="tm-doc-graph", config={"displayModeBar": False}),
-                     style_extra={"flex": "4"}),
-        section_card("Sync Freshness", "STUDENT ALL vs STATUS STUDENT (sync_date)",
+                     style_extra={"flex": "6"}),
+        section_card("Tools / Skills Coverage", "Skill paling umum di pool kandidat saat ini — cek ketersediaan skill untuk matching (BT-01)",
                      dcc.Graph(id="tm-sync-graph", config={"displayModeBar": False}),
-                     style_extra={"flex": "4"}),
-        section_card("Ketersediaan", "Status kesiapan mahasiswa",
-                     dcc.Graph(id="tm-ketersediaan-graph", config={"displayModeBar": False}),
-                     style_extra={"flex": "4"}),
+                     style_extra={"flex": "6"}),
     ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
     html.Div([
         section_card("IPK Distribution", "Sebaran IPK pool mahasiswa hasil filter",
                      dcc.Graph(id="tm-ipk-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
-        section_card("Domisili Distribution", "Top domisili kandidat eligible",
+        section_card("Talent Pool Funnel", "Drop-off tiap gate: aktif -> dokumen lengkap -> eligible -> siap dikirim (sync segar)",
                      dcc.Graph(id="tm-domisili-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
     ], style={"display": "flex", "gap": "12px"}),
@@ -271,7 +369,6 @@ def update_ipk_label(ipk_range):
     Output("tm-match-table", "children"),
     Output("tm-doc-graph", "figure"),
     Output("tm-sync-graph", "figure"),
-    Output("tm-ketersediaan-graph", "figure"),
     Output("tm-ipk-graph", "figure"),
     Output("tm-domisili-graph", "figure"),
     Input("tm-filter-prodi", "value"),
@@ -281,19 +378,29 @@ def update_ipk_label(ipk_range):
     Input("tm-filter-domisili", "value"),
     Input("tm-filter-tools", "value"),
     Input("tm-filter-ipk", "value"),
+    Input("tm-sent-store", "data"),
+    Input("tm-send-company", "value"),
+    State("tm-selected-store", "data"),
 )
-def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_range):
+def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_range,
+                     sent_records, send_company, selected_ids):
+    sent_records = sent_records or []
+    if send_company:
+
+        sent_records_nims = [r["nim"] for r in sent_records if r.get("company") == send_company]
+    else:
+        sent_records_nims = [r["nim"] for r in sent_records]
     d, req = filter_students(prodi, position, arr, semester, domisili, ipk_range, tool_search)
 
     available = int(d["is_eligible"].sum())
     complete_pct = round(100 * d["doc_complete"].mean(), 1) if len(d) else 0
-    synced_pct = round(100 * (d["sync_bucket"] == "Up to Date").mean(), 1) if len(d) else 0
+    synced_pct = round(100 * d["sync_bucket"].isin(GOOD_SYNC_BUCKETS).mean(), 1) if len(d) else 0
 
     kpi_row = [
         kpi_card("Available Students", f"{available}", "Aktif, dokumen lengkap, IPK terisi"),
         kpi_card("% Complete Documents", f"{complete_pct}%", "CV + portofolio terisi"),
         kpi_card("Sync Status", f"{synced_pct}%",
-                 "Up to date (<= 7 hari sejak sync_date)",
+                 f"sync_date sejalan (<= {STALE_WEEKS} minggu) dengan aktivitas tracking terakhir",
                  color=COLORS["danger"] if synced_pct < 70 else COLORS["success"],
                  accent=COLORS["danger"] if synced_pct < 70 else COLORS["success"]),
     ]
@@ -306,58 +413,21 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
 
     if req is not None and len(d):
         dt = d.copy()
-        dt = dt[dt["is_eligible"]]
-        dt = dt.sort_values("match_score", ascending=False).head(15)
+
+        dt = dt[dt["is_eligible"] & dt["is_available"]]
+
+        dt = dt.sort_values("match_score", ascending=False)
         if len(dt):
-            match_table = dash_table.DataTable(
-                columns=[
-                    {"name": "NIM", "id": "nim"},
-                    {"name": "Nama", "id": "nama_status"},
-                    {"name": "Prodi", "id": "program_studi"},
-                    {"name": "Semester", "id": "semester"},
-                    {"name": "IPK", "id": "ipk"},
-                    {"name": "Domisili", "id": "domisili"},
-                    {"name": "Tools", "id": "tools"},
-                    {"name": "Ketersediaan", "id": "ketersediaan"},
-                    {"name": "Match Score", "id": "match_score"},
-                ],
-                data=dt[["nim", "nama_status", "program_studi", "semester", "ipk",
-                         "domisili", "tools", "ketersediaan", "match_score"]].fillna("-").to_dict("records"),
-                style_as_list_view=True,
-                style_header={"backgroundColor": COLORS["surface"], "fontWeight": "600", "fontSize": "11px",
-                              "borderBottom": f"1px solid {COLORS['border']}"},
-                style_cell={"fontSize": "11px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif"},
-                style_data_conditional=[
-                    {"if": {"filter_query": "{match_score} >= 70"}, "backgroundColor": COLORS["success_bg"]},
-                    {"if": {"filter_query": "{match_score} < 40"}, "backgroundColor": COLORS["warning_bg"]},
-                ],
-            )
+            match_table = build_match_table(dt, selected_ids, sent_records_nims)
         else:
-            match_table = html.Div("Tidak ada kandidat eligible untuk filter ini.",
+            match_table = html.Div("Tidak ada kandidat eligible & available untuk filter ini.",
                                     style={"fontSize": "12px", "color": COLORS["muted"]})
     else:
-        dt = d[d["is_eligible"]].sort_values("ipk", ascending=False).head(15)
+        dt = d[d["is_eligible"] & d["is_available"]].sort_values("ipk", ascending=False) if len(d) else d
         if len(dt):
-            match_table = dash_table.DataTable(
-                columns=[
-                    {"name": "NIM", "id": "nim"},
-                    {"name": "Nama", "id": "nama_status"},
-                    {"name": "Prodi", "id": "program_studi"},
-                    {"name": "Semester", "id": "semester"},
-                    {"name": "IPK", "id": "ipk"},
-                    {"name": "Domisili", "id": "domisili"},
-                    {"name": "Tools", "id": "tools"},
-                    {"name": "Ketersediaan", "id": "ketersediaan"},
-                ],
-                data=dt[["nim", "nama_status", "program_studi", "semester", "ipk",
-                         "domisili", "tools", "ketersediaan"]].fillna("-").to_dict("records"),
-                style_as_list_view=True,
-                style_header={"backgroundColor": COLORS["surface"], "fontWeight": "600", "fontSize": "11px",
-                              "borderBottom": f"1px solid {COLORS['border']}"},
-                style_cell={"fontSize": "11px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif"},
-            )
+            match_table = build_match_table(dt, selected_ids, sent_records_nims)
         else:
-            match_table = html.Div("Pilih Position untuk melihat skor kecocokan, atau tidak ada data untuk filter ini.",
+            match_table = html.Div("Pilih Position untuk melihat skor kecocokan, atau tidak ada kandidat eligible & available untuk filter ini.",
                                     style={"fontSize": "12px", "color": COLORS["muted"]})
 
     if len(d):
@@ -371,29 +441,24 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
     else:
         doc_fig = empty_fig()
 
-    if len(d):
-        sync_counts = d["sync_bucket"].value_counts()
-        order = ["Up to Date", "Perlu Update", "Outdated", "Belum Sync"]
-        sync_counts = sync_counts.reindex(order).dropna()
-        sync_colors = {"Up to Date": COLORS["success"], "Perlu Update": COLORS["primary_soft"],
-                       "Outdated": COLORS["primary_dark"], "Belum Sync": CATEGORICAL[0]}
-        sync_fig = go.Figure(go.Bar(
-            x=sync_counts.index, y=sync_counts.values,
-            marker_color=[sync_colors.get(s, CATEGORICAL[0]) for s in sync_counts.index],
-        ))
-        sync_fig.update_layout(**PLOTLY_LAYOUT, height=240, yaxis_title="Jumlah mahasiswa")
+    if len(d) and "tools" in d.columns and d["tools"].notna().any():
+        tool_counts = {}
+        for raw in d["tools"].dropna().astype(str):
+            for token in re.split(r"\s*[;,/]\s*|\band\b|&", raw.lower()):
+                token = token.strip()
+                if token:
+                    tool_counts[token] = tool_counts.get(token, 0) + 1
+        if tool_counts:
+            tool_series = pd.Series(tool_counts).sort_values(ascending=True).tail(10)
+            sync_fig = go.Figure(go.Bar(
+                x=tool_series.values, y=[t.title() for t in tool_series.index], orientation="h",
+                marker_color=COLORS["primary"],
+            ))
+            sync_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="Jumlah mahasiswa")
+        else:
+            sync_fig = empty_fig(240, "Tidak ada data tools")
     else:
-        sync_fig = empty_fig()
-
-    if len(d) and "ketersediaan" in d.columns and d["ketersediaan"].notna().any():
-        ket_counts = d["ketersediaan"].value_counts()
-        ket_fig = go.Figure(go.Bar(
-            x=ket_counts.values, y=ket_counts.index, orientation="h",
-            marker_color=CATEGORICAL[0],
-        ))
-        ket_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="Jumlah mahasiswa")
-    else:
-        ket_fig = empty_fig(240, "Kolom ketersediaan tidak tersedia / kosong")
+        sync_fig = empty_fig(240, "Kolom tools tidak tersedia / kosong")
 
     ipk_numeric = pd.to_numeric(d["ipk"], errors="coerce").dropna() if len(d) else pd.Series(dtype=float)
     if len(ipk_numeric):
@@ -404,15 +469,57 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
     else:
         ipk_fig = empty_fig()
 
-    dom_pool = d[d["is_eligible"]] if len(d) else d
-    if len(dom_pool) and "domisili" in dom_pool.columns and dom_pool["domisili"].notna().any():
-        dom_counts = dom_pool["domisili"].value_counts().sort_values(ascending=True).tail(10)
-        dom_fig = go.Figure(go.Bar(
-            x=dom_counts.values, y=dom_counts.index, orientation="h",
-            marker_color=COLORS["primary_soft"],
-        ))
-        dom_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="Jumlah mahasiswa eligible")
-    else:
-        dom_fig = empty_fig(240, "Kolom domisili tidak tersedia / kosong")
+    if len(d):
+        n_total = len(d)
+        n_active = int(d["is_active"].sum())
+        n_doc = int((d["is_active"] & d["doc_complete"]).sum())
+        n_eligible = int(d["is_eligible"].sum())
+        n_ready = int((d["is_eligible"] & d["sync_bucket"].isin(GOOD_SYNC_BUCKETS)).sum())
 
-    return kpi_row, match_table, doc_fig, sync_fig, ket_fig, ipk_fig, dom_fig
+        funnel_fig = go.Figure(go.Funnel(
+            y=["Total Kandidat (filter aktif)", "Aktif", "Dokumen Lengkap", "Eligible", "Siap Dikirim (Sync Segar)"],
+            x=[n_total, n_active, n_doc, n_eligible, n_ready],
+            textinfo="value+percent initial",
+            marker=dict(color=[CATEGORICAL[0], COLORS["primary_soft"], COLORS["primary"],
+                                COLORS["primary_dark"], COLORS["success"]]),
+        ))
+        funnel_fig.update_layout(**PLOTLY_LAYOUT, height=240)
+        dom_fig = funnel_fig
+    else:
+        dom_fig = empty_fig(240, "Tidak ada data untuk filter ini")
+
+    return kpi_row, match_table, doc_fig, sync_fig, ipk_fig, dom_fig
+
+
+@callback(
+    Output("tm-selected-store", "data", allow_duplicate=True),
+    Input("tm-match-datatable", "selected_row_ids"),
+    prevent_initial_call=True,
+)
+def sync_selected_candidates(selected_row_ids):
+    return selected_row_ids or []
+
+
+@callback(
+    Output("tm-sent-store", "data"),
+    Output("tm-send-feedback", "children"),
+    Output("tm-selected-store", "data", allow_duplicate=True),
+    Input("tm-send-btn", "n_clicks"),
+    State("tm-selected-store", "data"),
+    State("tm-send-company", "value"),
+    State("tm-sent-store", "data"),
+    prevent_initial_call=True,
+)
+def mock_send_to_company(n_clicks, selected_ids, company_name, sent_records):
+    sent_records = list(sent_records or [])
+    if not company_name:
+        return dash.no_update, "Pilih perusahaan tujuan terlebih dahulu.", dash.no_update
+    if not selected_ids:
+        return dash.no_update, "Centang minimal satu kandidat untuk dikirim.", dash.no_update
+
+    now = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+    for nim in selected_ids:
+        sent_records.append({"nim": nim, "company": company_name, "sent_at": now})
+
+    feedback = f"✅ {len(selected_ids)} kandidat terkirim ke {company_name}."
+    return sent_records, feedback, []
