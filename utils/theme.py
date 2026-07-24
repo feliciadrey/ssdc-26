@@ -1,5 +1,5 @@
 COLORS = {
-    "bg": "#F2F6F3",
+    "bg": "#E1F3E7",
     "surface": "#FFFFFF",
     "surface_alt": "#EAF2ED",
     "surface_raised": "#FFFFFF",
@@ -56,6 +56,7 @@ PLOTLY_LAYOUT = dict(
 )
 
 SIDEBAR_WIDTH = "232px"
+SIDEBAR_GRADIENT = f"linear-gradient(180deg, {COLORS['primary_dark']} 0%, {COLORS['primary']} 55%, {COLORS['primary_soft']} 100%)"
 RADIUS_SM = "8px"
 RADIUS_MD = "12px"
 RADIUS_LG = "16px"

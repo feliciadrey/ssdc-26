@@ -7,7 +7,7 @@
 
 body {
     margin: 0;
-    background: #F2F6F3;
+    background: #E1F3E7;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -16,19 +16,19 @@ body {
     transition: background 0.15s ease, color 0.15s ease;
 }
 .sidebar-link:hover {
-    background: #EAF2ED;
-    color: #101B14 !important;
+    background: rgba(255,255,255,0.10);
+    color: #FFFFFF !important;
 }
 .sidebar-link.active {
-    background: #E1F0E6 !important;
-    color: #0F4A30 !important;
+    background: rgba(255,255,255,0.18) !important;
+    color: #FFFFFF !important;
     font-weight: 600;
 }
 .sidebar-link.active .nav-indicator {
-    background: #1B6B47 !important;
+    background: #8FF0C0 !important;
 }
 .sidebar-link.active i {
-    color: #1B6B47;
+    color: #FFFFFF;
 }
 
 /* ---------- Cards ---------- */
