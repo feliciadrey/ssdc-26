@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from utils.data_loader import load_all
-from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT
+from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT, PAGE_STYLE, SPACE
 from utils.components import kpi_card, section_card, page_header, filter_control
 
 dash.register_page(__name__, path="/", name="Executive Summary")
@@ -34,12 +34,23 @@ def semester_label(d):
 
 tc["semester"] = tc["request_date"].apply(semester_label)
 
-SEMESTER_OPTIONS = sorted(s for s in tc["semester"].dropna().unique())
-SEKTOR_OPTIONS = sorted(s for s in tc["industry_sector"].dropna().unique())
+def _semester_sort_key(label):
+    """Chronological order, e.g. Genap 2022/2023 -> Ganjil 2023/2024 ->
+    Genap 2023/2024 -> Ganjil 2024/2025 ... Plain alphabetical sort puts
+    "Ganjil" before "Genap" and breaks this real-world academic ordering."""
+    kind, years = label.split(" ", 1)
+    start_year = int(years.split("/")[0])
+    if kind == "Genap":
+        # Genap Y/Y+1 runs Jan-Jul of year Y+1 -> first half of that year
+        return (start_year + 1, 1)
+    # Ganjil Y/Y+1 runs Aug-Dec of year Y -> second half of that year
+    return (start_year, 2)
 
-_valid_dates = tc["request_date"].dropna()
-MIN_DATE = _valid_dates.min().date() if len(_valid_dates) else pd.Timestamp("2024-01-01").date()
-MAX_DATE = _valid_dates.max().date() if len(_valid_dates) else pd.Timestamp.today().date()
+
+SEMESTER_OPTIONS = sorted(
+    (s for s in tc["semester"].dropna().unique()), key=_semester_sort_key
+)
+SEKTOR_OPTIONS = sorted(s for s in tc["industry_sector"].dropna().unique())
 
 CITY_COORDS = {
     "jakarta": (-6.2088, 106.8456), "dki jakarta": (-6.2088, 106.8456),
@@ -82,13 +93,37 @@ def city_coord(name):
     return CITY_COORDS.get(key)
 
 
-def empty_fig(height=260, message="Tidak ada data untuk filter ini"):
+def empty_fig(height=260, message="No data for this filter"):
     fig = go.Figure()
     fig.update_layout(**PLOTLY_LAYOUT, height=height)
     fig.update_xaxes(visible=False)
     fig.update_yaxes(visible=False)
     fig.add_annotation(text=message, showarrow=False, font=dict(color=COLORS["muted"], size=12))
     return fig
+
+
+def prev_semester_of(semester):
+    """Return the semester immediately before `semester` in chronological
+    order, or None if there isn't one (e.g. it's the first on record)."""
+    if not semester or semester not in SEMESTER_OPTIONS:
+        return None
+    idx = SEMESTER_OPTIONS.index(semester)
+    return SEMESTER_OPTIONS[idx - 1] if idx > 0 else None
+
+
+def kpi_delta(curr, prev, unit="pp"):
+    """Plain numeric delta for kpi_card's trend_value param — no formatting,
+    arrows, or color here, kpi_card derives those from the sign alone.
+    unit='pp'  -> curr/prev are already rates: compare in percentage points.
+    unit='pct' -> curr/prev are counts/durations: compare as % change.
+    Returns None when there's nothing sensible to compare against."""
+    if prev is None:
+        return None
+    if unit == "pp":
+        return round(curr - prev, 1)
+    if prev == 0:
+        return None
+    return round(100 * (curr - prev) / prev, 1)
 
 
 def filter_tc(semester, start_date, end_date, sektor):
@@ -121,29 +156,21 @@ filter_bar = html.Div([
     filter_control("Semester", dcc.Dropdown(
         id="ov-filter-semester",
         options=[{"label": s, "value": s} for s in SEMESTER_OPTIONS],
-        placeholder="Semua semester",
+        placeholder="All semesters",
         clearable=True,
         style={"minWidth": "180px", "border": "none"},
     )),
-    filter_control("Date range", dcc.DatePickerRange(
-        id="ov-filter-daterange",
-        min_date_allowed=MIN_DATE,
-        max_date_allowed=MAX_DATE,
-        start_date=MIN_DATE,
-        end_date=MAX_DATE,
-        display_format="D MMM YYYY",
-    ), min_width="240px"),
-    filter_control("Sektor Perusahaan", dcc.Dropdown(
+    filter_control("Industry Sector", dcc.Dropdown(
         id="ov-filter-sektor",
         options=[{"label": s, "value": s} for s in SEKTOR_OPTIONS],
-        placeholder="Semua sektor",
+        placeholder="All sectors",
         clearable=True,
         style={"minWidth": "200px", "border": "none"},
     )),
-], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap", "alignItems": "flex-start"})
+], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["lg"], "flexWrap": "wrap", "alignItems": "flex-start"})
 
 export_button = html.Button(
-    "Export as PDF",
+    "Export PDF",
     id="ov-export-pdf-btn",
     n_clicks=0,
     style={
@@ -159,43 +186,50 @@ export_button = html.Button(
 )
 
 layout = html.Div([
-    page_header("Executive Summary", "Ringkasan Performa Placement · Seluruh Program Studi", export_button),
+    page_header("Performance Overview", "Placement performance across all study programs", export_button),
     html.Div(id="ov-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
-    html.Div(id="ov-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
+    html.Div(id="ov-kpi-row", style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"], "flexWrap": "wrap"}),
 
+    # Primary insight row: the trend line is the single most important chart
+    # on this page (placement vs request over time), so it gets roughly
+    # double the width of its neighbor rather than an equal three-way split.
     html.Div([
-        section_card("Trend: Placement vs Request", "Per bulan",
+        section_card("Placement Demand Trend", "Requests vs. successful placements, by month",
                      dcc.Graph(id="ov-trend-graph", config={"displayModeBar": False}),
-                     style_extra={"flex": "4"}),
-        section_card("Placement by Jenis Penempatan", "Magang / Part-time / Full-time",
+                     style_extra={"flex": "7"}),
+        section_card("Placement Distribution", "Share of placements by employment type",
                      dcc.Graph(id="ov-jenis-pie", config={"displayModeBar": False}),
                      style_extra={"flex": "4"}),
-        section_card("Demografik placement by kota", "Ukuran titik = jumlah kandidat dikirim",
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
+
+    # Supporting analysis: equal-weight secondary charts.
+    html.Div([
+        section_card("Placement by Location", "Where placed students are working",
                      html.Div([
                          dcc.Graph(id="ov-kota-map", config={"displayModeBar": False}),
                          html.Div(id="ov-kota-caption", style={"fontSize": "10px", "color": COLORS["muted"],
                                                                 "marginTop": "4px"}),
                      ]),
                      style_extra={"flex": "4"}),
-    ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
-
-    html.Div([
-        section_card("Top recruiting companies", "Permintaan terbanyak",
+        section_card("Top Recruiting Companies", "Companies requesting the most candidates",
                      dcc.Graph(id="ov-top-companies-bar", config={"displayModeBar": False}),
                      style_extra={"flex": "4"}),
-        section_card("Placement success rate", "Placed / dikirim, top 10",
+        section_card("Placement Success Rate", "Top 10 companies by placement rate",
                      dcc.Graph(id="ov-success-rate-bar", config={"displayModeBar": False}),
                      style_extra={"flex": "4"}),
-        section_card("Placement by program studi", "Klik bar untuk detail mahasiswa",
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
+
+    html.Div([
+        section_card("Placement by Study Program", "Click a bar to view students",
                      html.Div([
                          dcc.Graph(id="ov-prodi-bar", config={"displayModeBar": False}),
                          html.Div(id="ov-prodi-detail",
                                    style={"marginTop": "8px", "maxHeight": "180px", "overflowY": "auto"}),
                      ]),
-                     style_extra={"flex": "4"}),
-    ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
-], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
+                     style_extra={"flex": "1"}),
+    ], style={"display": "flex", "gap": SPACE["xs"]}),
+], style=PAGE_STYLE)
 
 
 dash.clientside_callback(
@@ -216,12 +250,10 @@ dash.clientside_callback(
     Output("ov-success-rate-bar", "figure"),
     Output("ov-prodi-bar", "figure"),
     Input("ov-filter-semester", "value"),
-    Input("ov-filter-daterange", "start_date"),
-    Input("ov-filter-daterange", "end_date"),
     Input("ov-filter-sektor", "value"),
 )
-def update_overview(semester, start_date, end_date, sektor):
-    d = filter_tc(semester, start_date, end_date, sektor)
+def update_overview(semester, sektor):
+    d = filter_tc(semester, None, None, sektor)
     ts = matching_students(d)
 
     total_requested = int(d["jumlah_permintaan"].sum()) if len(d) else 0
@@ -241,17 +273,58 @@ def update_overview(semester, start_date, end_date, sektor):
         if len(deltas):
             avg_time = round(deltas.mean(), 1)
 
+   
+    prev_sem = prev_semester_of(semester)
+    fulfillment_trend = total_trend = conversion_trend = avg_time_trend = None
+    if prev_sem:
+        d_prev = filter_tc(prev_sem, None, None, sektor)
+        ts_prev = matching_students(d_prev)
+        total_requested_prev = int(d_prev["jumlah_permintaan"].sum()) if len(d_prev) else 0
+        total_placed_prev = int((ts_prev["progress_student"] == "Placement").sum())
+        fulfillment_rate_prev = (
+            min(round(100 * total_placed_prev / total_requested_prev, 1), 100.0)
+            if total_requested_prev else 0
+        )
+        placement_rate_prev = round(100 * total_placed_prev / len(ts_prev), 1) if len(ts_prev) else 0
+
+        ts_placed_prev = ts_prev[ts_prev["progress_student"] == "Placement"]
+        avg_time_prev = None
+        if len(ts_placed_prev):
+            merged_prev = ts_placed_prev.merge(
+                d_prev[["nama_perusahaan", "posisi", "request_date"]],
+                left_on=["company", "position"], right_on=["nama_perusahaan", "posisi"],
+                how="left",
+            )
+            deltas_prev = (merged_prev["last_update"] - merged_prev["request_date"]).dt.days.dropna()
+            if len(deltas_prev):
+                avg_time_prev = round(deltas_prev.mean(), 1)
+
+        fulfillment_trend = kpi_delta(fulfillment_rate, fulfillment_rate_prev, unit="pp")
+        total_trend = kpi_delta(total_placed, total_placed_prev, unit="pct")
+        conversion_trend = kpi_delta(placement_rate, placement_rate_prev, unit="pp")
+        if avg_time is not None and avg_time_prev is not None:
+
+            avg_time_trend = -kpi_delta(avg_time, avg_time_prev, unit="pct")
+
     kpi_row = [
-        kpi_card("Fulfillment rate", f"{fulfillment_rate}%", "Posisi terisi VS Total headcount diminta",
+        kpi_card("Fulfillment Rate", f"{fulfillment_rate}%", "Filled positions vs. requested headcount",
                  color=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"],
-                 accent=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"]),
-        kpi_card("Total placement", f"{total_placed}", "Kandidat berhasil ditempatkan",
-                 color=COLORS["success"], accent=COLORS["success"]),
-        kpi_card("Conversion rate", f"{placement_rate}%", "Placement dari kandidat yang diproses",
+                 accent=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"],
+                 icon="bi bi-check2-circle",
+                 trend_value=fulfillment_trend, trend_suffix="%", trend_label="vs. last semester"),
+        kpi_card("Total Placements", f"{total_placed}", "Candidates successfully placed",
+                 color=COLORS["success"], accent=COLORS["success"],
+                 icon="bi bi-people-fill",
+                 trend_value=total_trend, trend_suffix="%", trend_label="vs. last semester"),
+        kpi_card("Conversion Rate", f"{placement_rate}%", "Share of processed candidates placed",
                  color=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
-                 accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"]),
-        kpi_card("Avg time to placement", f"{avg_time} hari" if avg_time is not None else "-",
-                 "Request date -> Placement update"),
+                 accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
+                 icon="bi bi-arrow-repeat",
+                 trend_value=conversion_trend, trend_suffix="%", trend_label="vs. last semester"),
+        kpi_card("Avg. Time to Placement", f"{avg_time} days" if avg_time is not None else "-",
+                 "Days from request to placement",
+                 accent=COLORS["accent"], icon="bi bi-clock-history",
+                 trend_value=avg_time_trend, trend_suffix="%", trend_label="faster than last semester"),
     ]
 
     if len(d):
@@ -285,9 +358,9 @@ def update_overview(semester, start_date, end_date, sektor):
             mode="lines+markers", name="Placement",
             line=dict(color=COLORS["primary_soft"], width=2),
         ))
-        trend_fig.update_layout(**PLOTLY_LAYOUT, height=280, legend=dict(orientation="h", y=-0.25))
+        trend_fig.update_layout(**PLOTLY_LAYOUT, height=260, legend=dict(orientation="h", y=-0.25))
     else:
-        trend_fig = empty_fig(280)
+        trend_fig = empty_fig(260)
 
     if len(ts) and ts["jenis_penempatan"].notna().any():
         jenis_counts = ts["jenis_penempatan"].value_counts()
@@ -295,10 +368,10 @@ def update_overview(semester, start_date, end_date, sektor):
             labels=jenis_counts.index, values=jenis_counts.values,
             marker=dict(colors=CATEGORICAL), hole=0.4,
         ))
-        jenis_fig.update_layout(**PLOTLY_LAYOUT, height=280, showlegend=True,
+        jenis_fig.update_layout(**PLOTLY_LAYOUT, height=260, showlegend=True,
                                legend=dict(orientation="h", y=-0.15, font=dict(size=10)))
     else:
-        jenis_fig = empty_fig(280)
+        jenis_fig = empty_fig(260)
 
     kota_caption = ""
     if len(d) and d["kota"].notna().any():
@@ -320,7 +393,7 @@ def update_overview(semester, start_date, end_date, sektor):
 
             kota_fig = go.Figure(go.Scattergeo(
                 lat=lats, lon=lons,
-                text=[f"{c}: {v} kandidat" for c, v in zip(mapped.index, mapped.values)],
+                text=[f"{c}: {v} candidates" for c, v in zip(mapped.index, mapped.values)],
                 hoverinfo="text",
                 marker=dict(
                     size=marker_sizes,
@@ -346,17 +419,17 @@ def update_overview(semester, start_date, end_date, sektor):
                 paper_bgcolor=COLORS["surface"],
                 font=dict(family="Inter, sans-serif", color=COLORS["text"], size=12),
                 margin=dict(l=0, r=0, t=10, b=0),
-                height=280,
+                height=232,
             )
         else:
-            kota_fig = empty_fig(280, "Kota tidak dikenali koordinatnya")
+            kota_fig = empty_fig(232, "City coordinates unavailable")
 
         if len(unmapped):
-            kota_caption = "Belum ada koordinat untuk: " + ", ".join(unmapped.index[:6])
+            kota_caption = "Unmapped cities: " + ", ".join(unmapped.index[:6])
             if len(unmapped) > 6:
-                kota_caption += f", +{len(unmapped) - 6} lainnya"
+                kota_caption += f", +{len(unmapped) - 6} more"
     else:
-        kota_fig = empty_fig(280)
+        kota_fig = empty_fig(232)
 
     if len(d):
         top_companies = (
@@ -368,9 +441,9 @@ def update_overview(semester, start_date, end_date, sektor):
             x=top_companies.values, y=top_companies.index, orientation="h",
             marker_color=CATEGORICAL[0],
         ))
-        top_fig.update_layout(**PLOTLY_LAYOUT, height=280, xaxis_title="Total permintaan")
+        top_fig.update_layout(**PLOTLY_LAYOUT, height=232, xaxis_title="Total Requests")
     else:
-        top_fig = empty_fig(280)
+        top_fig = empty_fig(232)
 
     if len(d):
         comp_summary = d.groupby("nama_perusahaan").agg(dikirim=("jumlah_dikirimkan", "sum")).reset_index()
@@ -388,9 +461,9 @@ def update_overview(semester, start_date, end_date, sektor):
             x=comp_summary["rate"], y=comp_summary["nama_perusahaan"], orientation="h",
             marker_color=COLORS["success"],
         ))
-        rate_fig.update_layout(**PLOTLY_LAYOUT, height=280, xaxis_title="Success rate (%)")
+        rate_fig.update_layout(**PLOTLY_LAYOUT, height=232, xaxis_title="Success Rate (%)")
     else:
-        rate_fig = empty_fig(280)
+        rate_fig = empty_fig(232)
 
     if len(ts):
         ts_prodi = ts.merge(student_all[["NIM", "program_studi"]], on="NIM", how="left")
@@ -400,15 +473,22 @@ def update_overview(semester, start_date, end_date, sektor):
             .sort_values(ascending=True)
         )
         if len(prodi_counts):
+            # Fixed height squeezes the y-axis when there are many programs,
+            # so Plotly starts silently dropping tick labels to avoid
+            # overlap. Instead, size the chart to the number of bars (with a
+            # floor so it never looks empty with just 1-2 programs) so every
+            # label always has room to render.
+            prodi_height = max(232, 17 * len(prodi_counts) + 60)
             prodi_fig = go.Figure(go.Bar(
                 x=prodi_counts.values, y=prodi_counts.index, orientation="h",
                 marker_color=CATEGORICAL[2],
             ))
-            prodi_fig.update_layout(**PLOTLY_LAYOUT, height=280, xaxis_title="Total placement")
+            prodi_fig.update_layout(**PLOTLY_LAYOUT, height=prodi_height, xaxis_title="Total Placements")
+            prodi_fig.update_yaxes(automargin=True)
         else:
-            prodi_fig = empty_fig(280)
+            prodi_fig = empty_fig(232)
     else:
-        prodi_fig = empty_fig(280)
+        prodi_fig = empty_fig(232)
 
     return kpi_row, trend_fig, jenis_fig, kota_fig, kota_caption, top_fig, rate_fig, prodi_fig
 
@@ -417,19 +497,17 @@ def update_overview(semester, start_date, end_date, sektor):
     Output("ov-prodi-detail", "children"),
     Input("ov-prodi-bar", "clickData"),
     Input("ov-filter-semester", "value"),
-    Input("ov-filter-daterange", "start_date"),
-    Input("ov-filter-daterange", "end_date"),
     Input("ov-filter-sektor", "value"),
 )
-def update_prodi_detail(click_data, semester, start_date, end_date, sektor):
+def update_prodi_detail(click_data, semester, sektor):
     if not click_data:
         return html.Div(
-            "Klik salah satu bar di atas untuk melihat daftar mahasiswa per program studi.",
+            "Click a bar to view students in that program.",
             style={"fontSize": "12px", "color": COLORS["muted"]},
         )
 
     prodi = click_data["points"][0]["y"]
-    d = filter_tc(semester, start_date, end_date, sektor)
+    d = filter_tc(semester, None, None, sektor)
     ts = matching_students(d)
     ts_prodi = ts.merge(student_all[["NIM", "program_studi"]], on="NIM", how="left")
     sub = ts_prodi[
@@ -437,16 +515,16 @@ def update_prodi_detail(click_data, semester, start_date, end_date, sektor):
     ]
 
     if not len(sub):
-        return html.Div(f"Tidak ada data placement untuk {prodi} pada filter ini.",
+        return html.Div(f"No placements found for {prodi} with these filters.",
                          style={"fontSize": "12px", "color": COLORS["muted"]})
 
     table = dash_table.DataTable(
         columns=[
-            {"name": "NIM", "id": "NIM"},
-            {"name": "Nama", "id": "student_name"},
+            {"name": "Student ID", "id": "NIM"},
+            {"name": "Name", "id": "student_name"},
             {"name": "Company", "id": "company"},
-            {"name": "Posisi", "id": "position"},
-            {"name": "Update terakhir", "id": "last_update"},
+            {"name": "Position", "id": "position"},
+            {"name": "Last Update", "id": "last_update"},
         ],
         data=sub.assign(
             last_update=sub["last_update"].dt.date.astype(str)
@@ -458,7 +536,7 @@ def update_prodi_detail(click_data, semester, start_date, end_date, sektor):
         style_cell={"fontSize": "12px", "padding": "6px 8px", "fontFamily": "Inter, sans-serif"},
     )
     return html.Div([
-        html.Div(f"Mahasiswa placement — {prodi}", style={"fontSize": "12px", "fontWeight": "600",
+        html.Div(f"Placed Students — {prodi}", style={"fontSize": "12px", "fontWeight": "600",
                                                             "color": COLORS["text"], "marginBottom": "6px"}),
         table,
     ])

@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime
 
 from utils.data_loader import load_all
-from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT
+from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT, PAGE_STYLE, SPACE
 from utils.components import kpi_card, section_card, page_header, filter_control
 
 dash.register_page(__name__, path="/operational", name="Recruitment Ops")
@@ -40,7 +40,7 @@ POSITION_OPTIONS = sorted(s for s in tc["posisi"].dropna().unique())
 WORKING_ARR_OPTIONS = sorted(s for s in tc["working_arrangement"].dropna().unique()) if "working_arrangement" in tc else []
 BIDANG_STUDI_OPTIONS = sorted(s for s in tc["bidang_studi_dibutuhkan"].dropna().unique()) if "bidang_studi_dibutuhkan" in tc else []
 
-def empty_fig(height=260, message="Tidak ada data untuk filter ini"):
+def empty_fig(height=260, message="No data for this filter"):
     fig = go.Figure()
     fig.update_layout(**PLOTLY_LAYOUT, height=height)
     fig.update_xaxes(visible=False)
@@ -77,62 +77,59 @@ filter_bar = html.Div([
     filter_control("Min Semester", dcc.Dropdown(
         id="op-filter-semester",
         options=[{"label": str(s), "value": s} for s in MIN_SEMESTER_OPTIONS],
-        placeholder="Semua semester", clearable=True, style={"minWidth": "140px", "border": "none"},
+        placeholder="All semesters", clearable=True, style={"minWidth": "140px", "border": "none"},
     ), min_width="160px"),
     filter_control("Position", dcc.Dropdown(
         id="op-filter-position",
         options=[{"label": s, "value": s} for s in POSITION_OPTIONS],
-        placeholder="Semua posisi", clearable=True, style={"minWidth": "160px", "border": "none"},
+        placeholder="All positions", clearable=True, style={"minWidth": "160px", "border": "none"},
     ), min_width="180px"),
-    filter_control("Working Arr.", dcc.Dropdown(
+    filter_control("Work Type", dcc.Dropdown(
         id="op-filter-arr",
         options=[{"label": s, "value": s} for s in WORKING_ARR_OPTIONS],
-        placeholder="Semua tipe", clearable=True, style={"minWidth": "150px", "border": "none"},
+        placeholder="All types", clearable=True, style={"minWidth": "150px", "border": "none"},
     ), min_width="170px"),
-    filter_control("Bidang Studi", dcc.Dropdown(
+    filter_control("Field of Study", dcc.Dropdown(
         id="op-filter-bidang",
         options=[{"label": s, "value": s} for s in BIDANG_STUDI_OPTIONS],
-        placeholder="Semua bidang", clearable=True, style={"minWidth": "170px", "border": "none"},
+        placeholder="All fields of study", clearable=True, style={"minWidth": "170px", "border": "none"},
     ), min_width="190px"),
-], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap"})
+], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["lg"], "flexWrap": "wrap"})
 
 ghosting_toggle = dcc.Checklist(
     id="op-ghosting-cumulative",
-    options=[{"label": " Tampilkan kumulatif", "value": "cumulative"}],
+    options=[{"label": " Show Cumulative", "value": "cumulative"}],
     value=[], style={"fontSize": "11px", "color": COLORS["muted"]},
 )
 
 layout = html.Div([
     page_header("Recruitment Operations",
-                "Live Operations Tracking"),
+                "Live status of every request, from submission to placement"),
     html.Div(id="op-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
-    html.Div(id="op-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px"}),
+    html.Div(id="op-kpi-row", style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"]}),
 
     html.Div([
-        section_card("Distribusi Progress Request", "Status pengiriman saat ini, per jenis penempatan",
+        section_card("Request Status Breakdown", "Requests by status and placement type",
                      dcc.Graph(id="op-bubble-graph", config={"displayModeBar": False}),
-                     style_extra={"flex": "4"}),
-        section_card("Recruitment Funnel", "Konversi dari dikirim ke placement",
+                     style_extra={"flex": "5"}),
+        section_card("Recruitment Funnel", "Conversion from sent candidates to placement",
                      dcc.Graph(id="op-funnel-graph", config={"displayModeBar": False}),
-                     style_extra={"flex": "4"}),
-        section_card("Priority Req Table", "Skor = usia request x headcount, top 10 masih terbuka",
-                     html.Div(id="op-priority-table"),
-                     style_extra={"flex": "4"}),
-    ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
+                     style_extra={"flex": "5"}),
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
 
     html.Div([
         section_card("Ghosting Trend",
-                     html.Div(["Per bulan · ", ghosting_toggle],
+                     html.Div(["Candidates gone unresponsive, by month · ", ghosting_toggle],
                               style={"display": "flex", "alignItems": "center", "gap": "6px"}),
                      dcc.Graph(id="op-ghosting-trend-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
         section_card(
-            "Eskalasi Follow-Up ke Ghosting",
+            "Follow-Up Escalation",
             html.Div([
-                html.Span("Kandidat belum merespons, per level follow-up"),
+                html.Span("Unresponsive candidates, by follow-up stage"),
                 dbc.Button(
-                    "View Follow-Up List ↗",
+                    "View List ↗",
                     id="op-ghosting-open-link",
                     color="primary",
                     outline=True,
@@ -143,34 +140,33 @@ layout = html.Div([
             ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "gap": "10px"}),
             dcc.Graph(id="op-ghosting-stage-graph", config={"displayModeBar": False}),
             style_extra={"flex": "6"}),
-    ], style={"display": "flex", "gap": "12px"}),
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
+
     html.Div([
-        # dbc.Button(
-        #     "Buka Daftar Follow-Up Ghosting",
-        #     id="op-ghosting-open-link-2",
-        #     color="primary",
-        #     n_clicks=0,
-        #     style={"fontSize": "13px", "padding": "10px 18px"},
-        # ),
-        # html.Span("Klik untuk melihat daftar actionable candidate ghosting.", style={"color": COLORS["muted"], "marginLeft": "12px", "fontSize": "12px"}),
-    ], style={"display": "flex", "alignItems": "center", "marginTop": "14px", "marginBottom": "20px"}),
+        section_card("Priority Requests", "Top 10 open requests by age and headcount",
+                     html.Div(id="op-priority-table"),
+                     style_extra={"flex": "1"}),
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
+    html.Div([
+        
+    ], style={"display": "flex", "alignItems": "center", "marginTop": SPACE["xs"], "marginBottom": SPACE["sm"]}),
     dbc.Modal([
         dbc.ModalHeader("Ghosting Follow-Up List"),
         dbc.ModalBody([
             html.Div(
-                "Daftar mahasiswa dan perusahaan di status Ghosting untuk tim CDC follow up segera.",
+                "Candidates and companies marked as ghosting. Needs CDC team follow-up.",
                 style={"marginBottom": "12px", "color": COLORS["muted"]},
             ),
             dbc.Alert(id="op-ghosting-modal-alert", color="success", is_open=False, style={"marginBottom": "16px"}),
             dash_table.DataTable(
                 id="op-ghosting-detail-table",
                 columns=[
-                    {"name": "NIM", "id": "NIM"},
-                    {"name": "Nama", "id": "student_name"},
-                    {"name": "Perusahaan", "id": "company"},
-                    {"name": "Posisi", "id": "position"},
+                    {"name": "Student ID", "id": "NIM"},
+                    {"name": "Name", "id": "student_name"},
+                    {"name": "Company", "id": "company"},
+                    {"name": "Position", "id": "position"},
                     {"name": "Last Update", "id": "last_update"},
-                    {"name": "Rejection / Catatan", "id": "rejection"},
+                    {"name": "Rejection Notes", "id": "rejection"},
                 ],
                 data=[],
                 page_size=10,
@@ -183,11 +179,11 @@ layout = html.Div([
             ),
         ]),
         dbc.ModalFooter([
-            dbc.Button("Mark Follow-Up Done", id="op-ghosting-followup-btn", color="primary", n_clicks=0),
+            dbc.Button("Mark Done", id="op-ghosting-followup-btn", color="primary", n_clicks=0),
             dbc.Button("Close", id="op-ghosting-modal-close", color="secondary", className="ms-2", n_clicks=0),
         ]),
     ], id="op-ghosting-modal", size="xl", is_open=False, backdrop="static"),
-], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
+], style=PAGE_STYLE)
 
 
 @callback(
@@ -208,7 +204,6 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
     d = filter_tc(min_semester, position, arr, bidang)
     ts = matching_students(d)
 
-    # ---- KPIs ----
     open_request = int(d["is_open"].sum()) if len(d) else 0
     sent_mask = d["send_date"].notna() if len(d) else pd.Series(dtype=bool)
     avg_processing = round(d.loc[sent_mask, "processing_days"].mean(), 1) if sent_mask.any() else None
@@ -218,14 +213,14 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
     followup_count = int(ts["progress_student"].isin(FOLLOWUP_STAGES).sum()) if len(ts) else 0
 
     kpi_row = [
-        kpi_card("Open Request", f"{open_request}", "Total posisi yang belum terpenuhi"),
-        kpi_card("Average Processing Time",
-                  f"{avg_processing} hari" if avg_processing is not None else "-",
-                  "Durasi dari pengajuan hingga pengiriman"),
-        kpi_card("Perlu Follow-up", f"{followup_count}", "Kandidat aktif dalam tahap FU 1-3",
+        kpi_card("Open Requests", f"{open_request}", "Positions still unfilled"),
+        kpi_card("Avg. Processing Time",
+                  f"{avg_processing} days" if avg_processing is not None else "-",
+                  "Time from request to candidates sent"),
+        kpi_card("Needs Follow-Up", f"{followup_count}", "Candidates in follow-up stage 1-3",
                   color=COLORS["warning"] if followup_count > 0 else COLORS["text"],
                   accent=COLORS["warning"] if followup_count > 0 else None),
-        kpi_card("Jumlah Ghosting", f"{ghosting_count}", "Perlu eskalasi",
+        kpi_card("Ghosting Cases", f"{ghosting_count}", "Needs escalation",
                   color=COLORS["danger"], accent=COLORS["danger"]),
     ]
 
@@ -246,10 +241,10 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
                 marker_color=CATEGORICAL[i % len(CATEGORICAL)],
             ))
         bubble_fig.update_layout(**PLOTLY_LAYOUT, height=260, barmode="stack",
-                                  xaxis_title="Jumlah request", yaxis_title="Progress",
+                                  xaxis_title="Number of Requests", yaxis_title="Status",
                                   legend=dict(orientation="h", y=-0.3, font=dict(size=9)))
     else:
-        bubble_fig = empty_fig(260, "Data progress / jenis penempatan tidak tersedia untuk filter ini")
+        bubble_fig = empty_fig(260, "Status data unavailable for this filter")
 
     if len(d) or len(ts):
         total_sent = int(d["jumlah_dikirimkan"].sum()) if len(d) else 0
@@ -258,7 +253,7 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
         final_plus = int(stage_counts.get("Final Interview", 0) + stage_counts.get("Placement", 0))
         placed = int(stage_counts.get("Placement", 0))
         funnel_fig = go.Figure(go.Funnel(
-            y=["Dikirim", "Diproses perusahaan", "Interview", "Final interview", "Placement"],
+            y=["Sent", "In Company Review", "Interview", "Final Interview", "Placement"],
             x=[total_sent, len(ts), interview_plus, final_plus, placed],
             marker={"color": [CATEGORICAL[0]] * 4 + [COLORS["success"]]},
             textinfo="value+percent previous",
@@ -276,10 +271,10 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
             priority_table = dash_table.DataTable(
                 columns=[
                     {"name": "Company", "id": "nama_perusahaan"},
-                    {"name": "Posisi", "id": "posisi"},
+                    {"name": "Position", "id": "posisi"},
                     {"name": "Headcount", "id": "headcount_n"},
-                    {"name": "Usia (hari)", "id": "aging_days"},
-                    {"name": "Skor", "id": "priority_score"},
+                    {"name": "Age (Days)", "id": "aging_days"},
+                    {"name": "Priority Score", "id": "priority_score"},
                 ],
                 data=open_d[["nama_perusahaan", "posisi", "headcount_n", "aging_days", "priority_score"]].to_dict("records"),
                 style_as_list_view=True,
@@ -291,10 +286,10 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
                 ],
             )
         else:
-            priority_table = html.Div("Tidak ada request terbuka untuk filter ini.",
+            priority_table = html.Div("No open requests for this filter.",
                                        style={"fontSize": "12px", "color": COLORS["muted"]})
     else:
-        priority_table = html.Div("Tidak ada data untuk filter ini.",
+        priority_table = html.Div("No data for this filter.",
                                    style={"fontSize": "12px", "color": COLORS["muted"]})
         
     ts_ghost = ts[ts["progress_student"] == "Ghosting"]
@@ -311,16 +306,16 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
         if "cumulative" in (ghosting_mode or []):
             cum_values = pd.Series(monthly_values).cumsum().tolist()
             trend_fig.add_trace(go.Scatter(x=month_labels, y=cum_values, mode="lines+markers",
-                                            name="Kumulatif", line=dict(color=COLORS["primary_dark"], width=2)))
+                                            name="Cumulative", line=dict(color=COLORS["primary_dark"], width=2)))
         else:
             trend_fig.add_trace(go.Scatter(x=month_labels, y=monthly_values, mode="lines+markers",
-                                            name="Ghosting per bulan", line=dict(color=COLORS["primary_soft"], width=2)))
+                                            name="Monthly Ghosting", line=dict(color=COLORS["primary_soft"], width=2)))
             trend_fig.add_trace(go.Scatter(x=month_labels, y=pd.Series(monthly_values).cumsum().tolist(),
-                                            mode="lines+markers", name="Kumulatif",
+                                            mode="lines+markers", name="Cumulative",
                                             line=dict(color=COLORS["primary_dark"], width=2, dash="dot")))
         trend_fig.update_layout(**PLOTLY_LAYOUT, height=220, legend=dict(orientation="h", y=-0.3, font=dict(size=9)))
     else:
-        trend_fig = empty_fig(220, "Belum ada data ghosting untuk filter ini")
+        trend_fig = empty_fig(220, "No ghosting data for this filter")
 
     if len(ts_ghost):
         ghosting_detail_data = ts_ghost[["NIM", "student_name", "company", "position", "last_update", "rejection"]].copy()
@@ -342,10 +337,10 @@ def update_ops(min_semester, position, arr, bidang, ghosting_mode):
             x=fu_counts.values, y=fu_counts.index, orientation="h",
             marker_color=[FU_COLORS[s] for s in fu_counts.index],
         ))
-        stage_fig.update_layout(**PLOTLY_LAYOUT, height=220, xaxis_title="Jumlah kandidat")
+        stage_fig.update_layout(**PLOTLY_LAYOUT, height=220, xaxis_title="Number of Candidates")
         stage_fig.update_yaxes(autorange="reversed")
     else:
-        stage_fig = empty_fig(220, "Belum ada kandidat di tahap follow-up untuk filter ini")
+        stage_fig = empty_fig(220, "No candidates in follow-up for this filter")
 
     return kpi_row, bubble_fig, funnel_fig, priority_table, trend_fig, stage_fig, ghosting_detail_data
 
@@ -370,6 +365,6 @@ def toggle_ghosting_modal(open_clicks, close_clicks, followup_clicks, is_open):
     if trigger_id == "op-ghosting-modal-close":
         return False, "", False
     if trigger_id == "op-ghosting-followup-btn":
-        return True, "Follow-up berhasil dicatat. Tim CDC dapat melanjutkan panggilan.", True
+        return True, "Follow-up logged. CDC team can proceed with outreach.", True
 
     return is_open, "", False

@@ -31,12 +31,20 @@ body {
     color: #FFFFFF;
 }
 
-/* ---------- Cards ---------- */
+/* ---------- Cards ----------
+   Charts (.section-card) get the stronger hover lift; KPI cards get a
+   smaller, quieter lift so charts keep more visual weight at rest and on
+   interaction, matching the intended scan order (title -> filters -> KPIs
+   -> charts -> tables). */
 .section-card, .kpi-card {
     transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
-.section-card:hover, .kpi-card:hover {
-    box-shadow: 0 8px 20px rgba(16, 27, 20, 0.08), 0 3px 6px rgba(16, 27, 20, 0.04);
+.section-card:hover {
+    box-shadow: 0 10px 22px rgba(16, 27, 20, 0.10), 0 3px 6px rgba(16, 27, 20, 0.05);
+    transform: translateY(-2px);
+}
+.kpi-card:hover {
+    box-shadow: 0 4px 10px rgba(16, 27, 20, 0.06), 0 2px 3px rgba(16, 27, 20, 0.03);
     transform: translateY(-1px);
 }
 
@@ -47,9 +55,19 @@ body {
 }
 .dash-table-container th {
     font-weight: 650 !important;
+    padding: 6px 8px !important;
 }
 .dash-table-container .dash-cell {
     border-bottom: 1px solid #EEF3EE !important;
+}
+
+/* ---------- Filter bar rhythm ---------- */
+.filter-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-bottom: 12px;
 }
 
 /* ---------- Scrollbar ---------- */
@@ -75,4 +93,180 @@ a {
 :focus-visible {
     outline: 2px solid #1B6B47;
     outline-offset: 2px;
+}
+
+/* ---------- Dropdown filters (dcc.Dropdown / react-select) ----------
+   Dash ships these with a default blue/grey theme (border, focus ring,
+   selected-option highlight). Re-themed to the app's green so every filter
+   control reads as one family instead of a generic default.
+
+   Covers TWO possible underlying libraries so this works regardless of
+   Dash version: legacy react-select v1 (stable ".Select-*" class names)
+   and react-select v3+ (emotion-generated hashed classes, e.g.
+   "css-1s2u09g-control" — targeted here via substring attribute selectors
+   like [class*="-control"], since the hash prefix changes but the
+   "-control" / "-placeholder" / "-menu" suffix stays stable). Both rulesets
+   are scoped under .dash-dropdown, the wrapper Dash always renders around
+   dcc.Dropdown, so they can't leak onto unrelated elements. */
+
+/* -- legacy react-select v1 -- */
+.dash-dropdown .Select-control {
+    border-color: #DCE6DF !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    transition: border-color 0.15s ease;
+}
+.dash-dropdown .Select-control:hover {
+    border-color: #A9C7B3 !important;
+}
+.dash-dropdown.is-focused:not(.is-open) > .Select-control,
+.dash-dropdown .is-focused:not(.is-open) > .Select-control {
+    border-color: #1B6B47 !important;
+    box-shadow: 0 0 0 1px #1B6B47 !important;
+}
+.dash-dropdown .is-open > .Select-control {
+    border-color: #1B6B47 !important;
+    box-shadow: 0 0 0 1px #1B6B47 !important;
+}
+.dash-dropdown .Select-placeholder,
+.dash-dropdown .Select--single > .Select-control .Select-value {
+    color: #8A9A8F !important;
+}
+.dash-dropdown .Select-value-label {
+    color: #101B14 !important;
+}
+.dash-dropdown .Select-arrow {
+    border-color: #6B7A70 transparent transparent !important;
+}
+.dash-dropdown .is-open .Select-arrow {
+    border-color: transparent transparent #6B7A70 !important;
+}
+.dash-dropdown .Select-menu-outer {
+    border-color: #DCE6DF !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(16, 27, 20, 0.10) !important;
+    margin-top: 6px !important;
+}
+.dash-dropdown .Select-option {
+    color: #101B14 !important;
+}
+.dash-dropdown .Select-option.is-focused {
+    background-color: #E1F0E6 !important;
+    color: #0F4A30 !important;
+}
+.dash-dropdown .Select-option.is-selected {
+    background-color: #1B6B47 !important;
+    color: #FFFFFF !important;
+}
+.dash-dropdown .Select-value {
+    background-color: #E1F0E6 !important;
+    border: 1px solid #BFE3CE !important;
+    color: #0F4A30 !important;
+    border-radius: 6px !important;
+}
+.dash-dropdown .Select-value-icon {
+    border-right-color: #BFE3CE !important;
+}
+.dash-dropdown .Select-value-icon:hover {
+    background-color: #1B6B47 !important;
+    color: #FFFFFF !important;
+}
+
+/* -- react-select v3+ (emotion hashed classes, matched by stable suffix) -- */
+.dash-dropdown div[class*="-control"] {
+    border-color: #DCE6DF !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    transition: border-color 0.15s ease;
+}
+.dash-dropdown div[class*="-control"]:hover {
+    border-color: #A9C7B3 !important;
+}
+.dash-dropdown div[class*="-control"]:focus-within {
+    border-color: #1B6B47 !important;
+    box-shadow: 0 0 0 1px #1B6B47 !important;
+}
+.dash-dropdown div[class*="-placeholder"] {
+    color: #8A9A8F !important;
+}
+.dash-dropdown div[class*="-singleValue"] {
+    color: #101B14 !important;
+}
+.dash-dropdown div[class*="-menu"] {
+    border-color: #DCE6DF !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(16, 27, 20, 0.10) !important;
+    overflow: hidden;
+    margin-top: 6px !important;
+}
+.dash-dropdown div[id*="-option"] {
+    color: #101B14 !important;
+}
+.dash-dropdown div[id*="-option"]:hover,
+.dash-dropdown div[id*="-option"][class*="focused"] {
+    background-color: #E1F0E6 !important;
+    color: #0F4A30 !important;
+}
+.dash-dropdown div[id*="-option"][aria-selected="true"] {
+    background-color: #1B6B47 !important;
+    color: #FFFFFF !important;
+}
+.dash-dropdown div[class*="-multiValue"] {
+    background-color: #E1F0E6 !important;
+    border: 1px solid #BFE3CE !important;
+    color: #0F4A30 !important;
+    border-radius: 6px !important;
+}
+.dash-dropdown div[class*="-multiValueLabel"] {
+    color: #0F4A30 !important;
+}
+.dash-dropdown div[class*="-multiValueRemove"]:hover {
+    background-color: #1B6B47 !important;
+    color: #FFFFFF !important;
+}
+.dash-dropdown svg {
+    color: #6B7A70 !important;
+}
+
+/* ---------- Range slider (dcc.RangeSlider / rc-slider) ---------- */
+.rc-slider-track {
+    background-color: #1B6B47 !important;
+}
+.rc-slider-handle {
+    border-color: #1B6B47 !important;
+}
+.rc-slider-handle:hover {
+    border-color: #0F4A30 !important;
+}
+.rc-slider-handle-active:active,
+.rc-slider-handle:focus-visible {
+    border-color: #0F4A30 !important;
+    box-shadow: 0 0 0 4px rgba(27, 107, 71, 0.18) !important;
+}
+.rc-slider-dot-active {
+    border-color: #1B6B47 !important;
+}
+
+/* ---------- Date range picker (dcc.DatePickerRange / react-dates) ---------- */
+.CalendarDay__selected,
+.CalendarDay__selected:hover {
+    background: #1B6B47 !important;
+    border: 1px double #1B6B47 !important;
+}
+.CalendarDay__selected_span {
+    background: #E1F0E6 !important;
+    border: 1px double #BFE3CE !important;
+    color: #0F4A30 !important;
+}
+.CalendarDay__hovered_span,
+.CalendarDay__hovered_span:hover {
+    background: #EAF2ED !important;
+    border: 1px double #BFE3CE !important;
+    color: #0F4A30 !important;
+}
+.DateInput_input__focused {
+    border-bottom-color: #1B6B47 !important;
+}
+.DayPickerKeyboardShortcuts_show__bottomRight::before {
+    border-right-color: #1B6B47 !important;
 }

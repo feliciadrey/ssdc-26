@@ -13,7 +13,7 @@ app = dash.Dash(
 server = app.server
 
 NAV_ITEMS = [
-    ("Executive Summary", "/", "bi bi-bar-chart-line-fill"),
+    ("Performance Overview", "/", "bi bi-bar-chart-line-fill"),
     ("Recruitment Operations", "/operational", "bi bi-activity"),
     ("Talent Matching", "/talent-matching", "bi bi-people-fill"),
 ]
@@ -77,7 +77,7 @@ sidebar = html.Div([
                 "background": "#5FE3A3", "marginRight": "6px",
                 "boxShadow": "0 0 0 3px rgba(95,227,163,0.25)",
             }),
-            html.Span("Data tersinkron", style={"fontSize": "11px", "fontWeight": "600", "color": "#FFFFFF"}),
+            html.Span("Data synced", style={"fontSize": "11px", "fontWeight": "600", "color": "#FFFFFF"}),
         ], style={"display": "flex", "alignItems": "center", "marginBottom": "3px"}),
         html.Div("17 Jul 2026, 09:12", style={"fontSize": "10.5px", "color": "rgba(255,255,255,0.6)"}),
     ], style={

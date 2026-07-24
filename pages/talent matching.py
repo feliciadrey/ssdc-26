@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 
 from utils.data_loader import load_all
-from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT
+from utils.theme import COLORS, CATEGORICAL, PLOTLY_LAYOUT, PAGE_STYLE, SPACE
 from utils.components import kpi_card, section_card, page_header, filter_control
 
 dash.register_page(__name__, path="/talent-matching", name="Talent Matching")
@@ -24,12 +24,9 @@ for _df in (student_all, status_student, talent_request, company, tracking_stude
     _df.columns = _df.columns.str.strip().str.lower()
 
 tracking_student["last_update"] = pd.to_datetime(tracking_student["last_update"], errors="coerce")
-# Most recent moment each student's data was actually relied on in a live
-# selection process at a company — used to check whether sync_date kept up.
+
 last_activity_by_nim = tracking_student.groupby("nim")["last_update"].max()
-# Status of that most recent tracking record — tells us if a student is
-# currently mid-process ("On Progress") or free again (Placement / Rejection
-# / Ghosting) once tracking activity is done.
+
 _tracking_sorted = tracking_student.dropna(subset=["last_update"]).sort_values("last_update")
 latest_rejection_by_nim = _tracking_sorted.groupby("nim")["rejection"].last()
 
@@ -116,7 +113,7 @@ IPK_MIN = float(_ipk_valid.min()) if len(_ipk_valid) else 2.0
 IPK_MAX = float(_ipk_valid.max()) if len(_ipk_valid) else 4.0
 
 
-def empty_fig(height=240, message="Tidak ada data untuk filter ini"):
+def empty_fig(height=240, message="No data for this filter"):
     fig = go.Figure()
     fig.update_layout(**PLOTLY_LAYOUT, height=height)
     fig.update_xaxes(visible=False)
@@ -185,12 +182,12 @@ def match_score(row, req):
 
 
 TABLE_COLUMNS = [
-    {"name": "NIM", "id": "nim"},
-    {"name": "Nama", "id": "nama_status"},
-    {"name": "Prodi", "id": "program_studi"},
+    {"name": "Student ID", "id": "nim"},
+    {"name": "Name", "id": "nama_status"},
+    {"name": "Study Program", "id": "program_studi"},
     {"name": "Semester", "id": "semester"},
-    {"name": "IPK", "id": "ipk"},
-    {"name": "Domisili", "id": "domisili"},
+    {"name": "GPA", "id": "ipk"},
+    {"name": "Location", "id": "domisili"},
     {"name": "Tools", "id": "tools"},
 ]
 TABLE_FIELDS = ["nim", "nama_status", "program_studi", "semester", "ipk", "domisili", "tools"]
@@ -229,10 +226,6 @@ def build_match_table(dt, selected_ids=None, sent_nims=None):
     )
 
 
-# ----------------------------------------------------------------------------
-# IPK slider — needs to visually communicate "this IS the full data range,
-# both ends draggable" from the very first render, without requiring a hover.
-# ----------------------------------------------------------------------------
 ipk_lo, ipk_hi = round(IPK_MIN, 1), round(IPK_MAX, 1)
 ipk_marks = {
     round(v, 1): {"label": f"{v:.1f}", "style": {"fontSize": "10px", "color": COLORS["muted"]}}
@@ -243,7 +236,7 @@ ipk_marks[ipk_hi] = {"label": f"{ipk_hi:.1f}", "style": {"fontSize": "10px", "co
 
 ipk_slider = html.Div([
     html.Div([
-        html.Span("Rentang IPK", style={"fontSize": "9.5px", "fontWeight": "700", "color": COLORS["muted"],
+        html.Span("GPA Range", style={"fontSize": "9.5px", "fontWeight": "700", "color": COLORS["muted"],
                                          "textTransform": "uppercase", "letterSpacing": "0.05em"}),
         html.Span(id="tm-ipk-value-label", style={"fontSize": "11px", "fontWeight": "600",
                                                     "color": COLORS["primary_dark"]}),
@@ -258,100 +251,101 @@ ipk_slider = html.Div([
     ),
 ], style={
     "background": COLORS["surface"], "border": f"1px solid {COLORS['border_soft']}",
-    "borderRadius": "10px", "padding": "12px 16px 8px 16px", "minWidth": "280px",
+    "borderRadius": "9px", "padding": "8px 12px 6px 12px", "minWidth": "280px",
 })
 
 filter_bar = html.Div([
-    filter_control("Program Studi", dcc.Dropdown(
+    filter_control("Study Program", dcc.Dropdown(
         id="tm-filter-prodi",
         options=[{"label": s, "value": s} for s in PRODI_OPTIONS],
-        placeholder="Semua prodi", clearable=True, style={"minWidth": "160px", "border": "none"},
+        placeholder="All programs", clearable=True, style={"minWidth": "160px", "border": "none"},
     ), min_width="180px"),
     filter_control("Position", dcc.Dropdown(
         id="tm-filter-position",
         options=[{"label": s, "value": s} for s in POSITION_OPTIONS],
-        placeholder="Pilih posisi target", clearable=True, style={"minWidth": "170px", "border": "none"},
+        placeholder="Select target position", clearable=True, style={"minWidth": "170px", "border": "none"},
     ), min_width="190px"),
-    filter_control("Working Arr.", dcc.Dropdown(
+    filter_control("Work Type", dcc.Dropdown(
         id="tm-filter-arr",
         options=[{"label": s, "value": s} for s in WORKING_ARR_OPTIONS],
-        placeholder="Semua tipe", clearable=True, style={"minWidth": "140px", "border": "none"},
+        placeholder="All types", clearable=True, style={"minWidth": "140px", "border": "none"},
     ), min_width="160px"),
-    filter_control("Semester (min)", dcc.Dropdown(
+    filter_control("Min Semester", dcc.Dropdown(
         id="tm-filter-semester",
         options=[{"label": str(s), "value": s} for s in SEMESTER_OPTIONS],
-        placeholder="Semua semester", clearable=True, style={"minWidth": "130px", "border": "none"},
+        placeholder="All semesters", clearable=True, style={"minWidth": "130px", "border": "none"},
     ), min_width="150px"),
-    filter_control("Domisili", dcc.Dropdown(
+    filter_control("Location", dcc.Dropdown(
         id="tm-filter-domisili",
         options=[{"label": s, "value": s} for s in DOMISILI_OPTIONS],
-        placeholder="Semua domisili", clearable=True, style={"minWidth": "150px", "border": "none"},
+        placeholder="All locations", clearable=True, style={"minWidth": "150px", "border": "none"},
     ), min_width="170px"),
     filter_control("Tools / Skills", dcc.Dropdown(
         id="tm-filter-tools",
         options=[{"label": s.title(), "value": s} for s in TOOLS_OPTIONS],
-        placeholder="Pilih tools / skills...",
+        placeholder="Search tools or skills",
         multi=True,
         searchable=True,
         clearable=True,
         style={"minWidth": "200px", "border": "none", "background": "transparent"},
     ), min_width="260px"),
     ipk_slider,
-], style={"display": "flex", "gap": "12px", "marginBottom": "20px", "flexWrap": "wrap", "alignItems": "flex-start"})
+], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"], "flexWrap": "wrap", "alignItems": "flex-start"})
 
 layout = html.Div([
-    page_header("Talent Matching Management",
-                "Cari kandidat paling sesuai kebutuhan perusahaan & pastikan data mahasiswa sinkron"),
+    page_header("Talent Matching",
+                "Find best-fit candidates with current, complete profiles"),
     filter_bar,
-    html.Div(id="tm-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
+    html.Div(id="tm-kpi-row", style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"], "flexWrap": "wrap"}),
 
     html.Div([
         section_card(
             "Ranked Candidate Matches",
-            "Hanya kandidat eligible & available. Centang kandidat, pilih perusahaan tujuan, lalu Kirim. Klik header untuk sort, 15 baris/halaman.",
+            "Eligible, available candidates only — select, choose a company, then send",
             html.Div([
                 html.Div([
                     dcc.Dropdown(
                         id="tm-send-company",
                         options=[{"label": c, "value": c} for c in COMPANY_OPTIONS],
-                        placeholder="Pilih perusahaan tujuan...",
+                        placeholder="Select company",
                         clearable=True,
                         style={"minWidth": "260px"},
                     ),
-                    html.Button("Kirim ke Perusahaan", id="tm-send-btn", n_clicks=0, style={
+                    html.Button("Send to Company", id="tm-send-btn", n_clicks=0, style={
                         "background": COLORS["primary_dark"], "color": "#fff", "border": "none",
                         "borderRadius": "8px", "padding": "8px 16px", "fontSize": "12px",
                         "fontWeight": "600", "cursor": "pointer",
                     }),
                     html.Div(id="tm-send-feedback", style={"fontSize": "11px", "color": COLORS["muted"],
                                                             "alignSelf": "center"}),
-                ], style={"display": "flex", "gap": "10px", "alignItems": "center", "marginBottom": "10px",
+                ], style={"display": "flex", "gap": SPACE["xs"], "alignItems": "center", "marginBottom": SPACE["xs"],
                           "flexWrap": "wrap"}),
                 html.Div(id="tm-match-table", style={"maxHeight": "460px", "overflowY": "auto"}),
                 dcc.Store(id="tm-selected-store", data=[]),
                 dcc.Store(id="tm-sent-store", data=[]),
             ]),
             style_extra={"flex": "1"}),
-    ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
 
+    # Supporting analysis: pool health at a glance.
     html.Div([
-        section_card("Document Completeness", "CV + portofolio lengkap vs kurang",
+        section_card("Document Completeness", "CV and portfolio submission status",
                      dcc.Graph(id="tm-doc-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
-        section_card("Tools / Skills Coverage", "Skill paling umum di pool kandidat saat ini — cek ketersediaan skill untuk matching (BT-01)",
+        section_card("Tools & Skills Coverage", "Most common skills in the candidate pool",
                      dcc.Graph(id="tm-sync-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
-    ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
+    ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
 
     html.Div([
-        section_card("IPK Distribution", "Sebaran IPK pool mahasiswa hasil filter",
+        section_card("GPA Distribution", "Spread of student GPAs in the filtered pool",
                      dcc.Graph(id="tm-ipk-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
-        section_card("Talent Pool Funnel", "Drop-off tiap gate: aktif -> dokumen lengkap -> eligible -> siap dikirim (sync segar)",
+        section_card("Talent Pool Funnel", "Candidate drop-off from active to ready-to-send",
                      dcc.Graph(id="tm-domisili-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "6"}),
-    ], style={"display": "flex", "gap": "12px"}),
-], style={"padding": "24px", "background": COLORS["bg"], "minHeight": "100vh"})
+    ], style={"display": "flex", "gap": SPACE["xs"]}),
+], style=PAGE_STYLE)
 
 
 @callback(
@@ -397,10 +391,10 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
     synced_pct = round(100 * d["sync_bucket"].isin(GOOD_SYNC_BUCKETS).mean(), 1) if len(d) else 0
 
     kpi_row = [
-        kpi_card("Available Students", f"{available}", "Aktif, dokumen lengkap, IPK terisi"),
-        kpi_card("% Complete Documents", f"{complete_pct}%", "CV + portofolio terisi"),
+        kpi_card("Available Students", f"{available}", "Active, documents complete, GPA on file"),
+        kpi_card("Documents Complete", f"{complete_pct}%", "CV and portfolio submitted"),
         kpi_card("Sync Status", f"{synced_pct}%",
-                 f"Sync date sejalan (≤ {STALE_WEEKS} minggu) dengan aktivitas tracking terakhir",
+                 f"Profile synced within {STALE_WEEKS} weeks of last activity",
                  color=COLORS["danger"] if synced_pct < 70 else COLORS["success"],
                  accent=COLORS["danger"] if synced_pct < 70 else COLORS["success"]),
     ]
@@ -408,8 +402,8 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
         d = d.copy()
         d["match_score"] = d.apply(lambda r: match_score(r, req), axis=1)
         avg_score = round(d.loc[d["is_eligible"], "match_score"].mean(), 1) if d["is_eligible"].any() else None
-        kpi_row.append(kpi_card("Avg Match Score", f"{avg_score}" if avg_score is not None else "-",
-                                 f"VS posisi: {req.get('nama_posisi', '-')}"))
+        kpi_row.append(kpi_card("Avg. Match Score", f"{avg_score}" if avg_score is not None else "-",
+                                 f"Matched against {req.get('nama_posisi', '-')}"))
 
     if req is not None and len(d):
         dt = d.copy()
@@ -420,18 +414,18 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
         if len(dt):
             match_table = build_match_table(dt, selected_ids, sent_records_nims)
         else:
-            match_table = html.Div("Tidak ada kandidat eligible & available untuk filter ini.",
+            match_table = html.Div("No eligible, available candidates for this filter.",
                                     style={"fontSize": "12px", "color": COLORS["muted"]})
     else:
         dt = d[d["is_eligible"] & d["is_available"]].sort_values("ipk", ascending=False) if len(d) else d
         if len(dt):
             match_table = build_match_table(dt, selected_ids, sent_records_nims)
         else:
-            match_table = html.Div("Pilih Position untuk melihat skor kecocokan, atau tidak ada kandidat eligible & available untuk filter ini.",
+            match_table = html.Div("Select a position to see match scores, or broaden your filters.",
                                     style={"fontSize": "12px", "color": COLORS["muted"]})
 
     if len(d):
-        doc_counts = d["doc_complete"].map({True: "Lengkap", False: "Kurang Lengkap"}).value_counts()
+        doc_counts = d["doc_complete"].map({True: "Complete", False: "Incomplete"}).value_counts()
         doc_fig = go.Figure(go.Pie(
             labels=doc_counts.index, values=doc_counts.values, hole=0.55,
             marker=dict(colors=[COLORS["primary_dark"], CATEGORICAL[0]]),
@@ -454,18 +448,18 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
                 x=tool_series.values, y=[t.title() for t in tool_series.index], orientation="h",
                 marker_color=COLORS["primary"],
             ))
-            sync_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="Jumlah mahasiswa")
+            sync_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="Number of Students")
         else:
-            sync_fig = empty_fig(240, "Tidak ada data tools")
+            sync_fig = empty_fig(240, "No tools data available")
     else:
-        sync_fig = empty_fig(240, "Kolom tools tidak tersedia / kosong")
+        sync_fig = empty_fig(240, "Tools data unavailable for this filter")
 
     ipk_numeric = pd.to_numeric(d["ipk"], errors="coerce").dropna() if len(d) else pd.Series(dtype=float)
     if len(ipk_numeric):
         ipk_fig = go.Figure(go.Histogram(x=ipk_numeric, nbinsx=20, marker_color=COLORS["primary"]))
         if ipk_range:
             ipk_fig.add_vline(x=ipk_range[0], line_dash="dot", line_color=COLORS["primary_dark"])
-        ipk_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="IPK", yaxis_title="Jumlah mahasiswa")
+        ipk_fig.update_layout(**PLOTLY_LAYOUT, height=240, xaxis_title="GPA", yaxis_title="Number of Students")
     else:
         ipk_fig = empty_fig()
 
@@ -477,7 +471,7 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
         n_ready = int((d["is_eligible"] & d["sync_bucket"].isin(GOOD_SYNC_BUCKETS)).sum())
 
         funnel_fig = go.Figure(go.Funnel(
-            y=["Total Kandidat (filter aktif)", "Aktif", "Dokumen Lengkap", "Eligible", "Siap Dikirim (Sync Segar)"],
+            y=["Total Candidates", "Active", "Documents Complete", "Eligible", "Ready to Send"],
             x=[n_total, n_active, n_doc, n_eligible, n_ready],
             textinfo="value+percent initial",
             marker=dict(color=[CATEGORICAL[0], COLORS["primary_soft"], COLORS["primary"],
@@ -486,7 +480,7 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
         funnel_fig.update_layout(**PLOTLY_LAYOUT, height=240)
         dom_fig = funnel_fig
     else:
-        dom_fig = empty_fig(240, "Tidak ada data untuk filter ini")
+        dom_fig = empty_fig(240, "No data for this filter")
 
     return kpi_row, match_table, doc_fig, sync_fig, ipk_fig, dom_fig
 
@@ -513,13 +507,13 @@ def sync_selected_candidates(selected_row_ids):
 def mock_send_to_company(n_clicks, selected_ids, company_name, sent_records):
     sent_records = list(sent_records or [])
     if not company_name:
-        return dash.no_update, "Pilih perusahaan tujuan terlebih dahulu.", dash.no_update
+        return dash.no_update, "Select a target company first.", dash.no_update
     if not selected_ids:
-        return dash.no_update, "Centang minimal satu kandidat untuk dikirim.", dash.no_update
+        return dash.no_update, "Select at least one candidate to send.", dash.no_update
 
     now = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
     for nim in selected_ids:
         sent_records.append({"nim": nim, "company": company_name, "sent_at": now})
 
-    feedback = f"{len(selected_ids)} kandidat terkirim ke {company_name}."
+    feedback = f"{len(selected_ids)} candidate(s) sent to {company_name}."
     return sent_records, feedback, []
