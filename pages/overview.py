@@ -159,7 +159,7 @@ export_button = html.Button(
 )
 
 layout = html.Div([
-    page_header("Executive Summary", "Ringkasan performa placement · seluruh program studi", export_button),
+    page_header("Executive Summary", "Ringkasan Performa Placement · Seluruh Program Studi", export_button),
     html.Div(id="ov-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
     html.Div(id="ov-kpi-row", style={"display": "flex", "gap": "12px", "marginBottom": "16px", "flexWrap": "wrap"}),
@@ -168,7 +168,7 @@ layout = html.Div([
         section_card("Trend: Placement vs Request", "Per bulan",
                      dcc.Graph(id="ov-trend-graph", config={"displayModeBar": False}),
                      style_extra={"flex": "4"}),
-        section_card("Placement by Jenis Penempatan", "Magang / part-time / full-time",
+        section_card("Placement by Jenis Penempatan", "Magang / Part-time / Full-time",
                      dcc.Graph(id="ov-jenis-pie", config={"displayModeBar": False}),
                      style_extra={"flex": "4"}),
         section_card("Demografik placement by kota", "Ukuran titik = jumlah kandidat dikirim",
@@ -242,7 +242,7 @@ def update_overview(semester, start_date, end_date, sektor):
             avg_time = round(deltas.mean(), 1)
 
     kpi_row = [
-        kpi_card("Fulfillment rate", f"{fulfillment_rate}%", "Posisi terisi vs total headcount diminta",
+        kpi_card("Fulfillment rate", f"{fulfillment_rate}%", "Posisi terisi VS Total headcount diminta",
                  color=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"],
                  accent=COLORS["success"] if fulfillment_rate >= 80 else COLORS["warning"]),
         kpi_card("Total placement", f"{total_placed}", "Kandidat berhasil ditempatkan",
@@ -251,7 +251,7 @@ def update_overview(semester, start_date, end_date, sektor):
                  color=COLORS["success"] if placement_rate >= 40 else COLORS["warning"],
                  accent=COLORS["success"] if placement_rate >= 40 else COLORS["warning"]),
         kpi_card("Avg time to placement", f"{avg_time} hari" if avg_time is not None else "-",
-                 "Request date -> placement update"),
+                 "Request date -> Placement update"),
     ]
 
     if len(d):

@@ -400,7 +400,7 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
         kpi_card("Available Students", f"{available}", "Aktif, dokumen lengkap, IPK terisi"),
         kpi_card("% Complete Documents", f"{complete_pct}%", "CV + portofolio terisi"),
         kpi_card("Sync Status", f"{synced_pct}%",
-                 f"sync_date sejalan (<= {STALE_WEEKS} minggu) dengan aktivitas tracking terakhir",
+                 f"Sync date sejalan (≤ {STALE_WEEKS} minggu) dengan aktivitas tracking terakhir",
                  color=COLORS["danger"] if synced_pct < 70 else COLORS["success"],
                  accent=COLORS["danger"] if synced_pct < 70 else COLORS["success"]),
     ]
@@ -409,7 +409,7 @@ def update_matching(prodi, position, arr, semester, domisili, tool_search, ipk_r
         d["match_score"] = d.apply(lambda r: match_score(r, req), axis=1)
         avg_score = round(d.loc[d["is_eligible"], "match_score"].mean(), 1) if d["is_eligible"].any() else None
         kpi_row.append(kpi_card("Avg Match Score", f"{avg_score}" if avg_score is not None else "-",
-                                 f"vs posisi: {req.get('nama_posisi', '-')}"))
+                                 f"VS posisi: {req.get('nama_posisi', '-')}"))
 
     if req is not None and len(d):
         dt = d.copy()
@@ -521,5 +521,5 @@ def mock_send_to_company(n_clicks, selected_ids, company_name, sent_records):
     for nim in selected_ids:
         sent_records.append({"nim": nim, "company": company_name, "sent_at": now})
 
-    feedback = f"✅ {len(selected_ids)} kandidat terkirim ke {company_name}."
+    feedback = f"{len(selected_ids)} kandidat terkirim ke {company_name}."
     return sent_records, feedback, []
