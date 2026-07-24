@@ -102,9 +102,25 @@ ghosting_toggle = dcc.Checklist(
     value=[], style={"fontSize": "11px", "color": COLORS["muted"]},
 )
 
+export_button = html.Button(
+    "Export PDF",
+    id="op-export-pdf-btn",
+    n_clicks=0,
+    style={
+        "background": COLORS["primary"],
+        "color": "#FFFFFF",
+        "border": "none",
+        "borderRadius": "8px",
+        "padding": "10px 16px",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "cursor": "pointer",
+    },
+)
+
 layout = html.Div([
     page_header("Recruitment Operations",
-                "Live status of every request, from submission to placement"),
+                "Live status of every request, from submission to placement", export_button),
     html.Div(id="op-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
     html.Div(id="op-kpi-row", style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"]}),
@@ -184,6 +200,14 @@ layout = html.Div([
         ]),
     ], id="op-ghosting-modal", size="xl", is_open=False, backdrop="static"),
 ], style=PAGE_STYLE)
+
+
+dash.clientside_callback(
+    "function(n_clicks) { if (n_clicks) { window.print(); } return ''; }",
+    Output("op-export-pdf-dummy", "children"),
+    Input("op-export-pdf-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 @callback(

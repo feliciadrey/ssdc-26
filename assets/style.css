@@ -228,23 +228,45 @@ a {
     color: #6B7A70 !important;
 }
 
-/* ---------- Range slider (dcc.RangeSlider / rc-slider) ---------- */
-.rc-slider-track {
+/* ---------- Range slider (dcc.RangeSlider — Dash 4.x renders dash-slider-* classes) ---------- */
+.dash-slider-range {
     background-color: #1B6B47 !important;
 }
-.rc-slider-handle {
-    border-color: #1B6B47 !important;
+.dash-slider-thumb {
+    background-color: #FFFFFF !important;
+    border: 2px solid #1B6B47 !important;
+    outline: none !important;
 }
-.rc-slider-handle:hover {
+.dash-slider-thumb:hover {
     border-color: #0F4A30 !important;
 }
-.rc-slider-handle-active:active,
-.rc-slider-handle:focus-visible {
+.dash-slider-thumb:focus,
+.dash-slider-thumb:focus-visible {
+    outline: none !important;
     border-color: #0F4A30 !important;
     box-shadow: 0 0 0 4px rgba(27, 107, 71, 0.18) !important;
 }
-.rc-slider-dot-active {
+.dash-slider-dot {
     border-color: #1B6B47 !important;
+}
+
+/* IPK (GPA) range slider on the Talent Matching page — dark green accent */
+#tm-filter-ipk .dash-slider-range {
+    background-color: #0F4A30 !important;
+}
+#tm-filter-ipk .dash-slider-thumb {
+    border-color: #0F4A30 !important;
+}
+#tm-filter-ipk .dash-slider-thumb:hover {
+    border-color: #0F4A30 !important;
+}
+#tm-filter-ipk .dash-slider-thumb:focus,
+#tm-filter-ipk .dash-slider-thumb:focus-visible {
+    border-color: #0F4A30 !important;
+    box-shadow: 0 0 0 4px rgba(15, 74, 48, 0.18) !important;
+}
+#tm-filter-ipk .dash-slider-dot {
+    border-color: #0F4A30 !important;
 }
 
 /* ---------- Date range picker (dcc.DatePickerRange / react-dates) ---------- */

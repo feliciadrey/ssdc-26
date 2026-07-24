@@ -292,9 +292,26 @@ filter_bar = html.Div([
     ipk_slider,
 ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"], "flexWrap": "wrap", "alignItems": "flex-start"})
 
+export_button = html.Button(
+    "Export PDF",
+    id="tm-export-pdf-btn",
+    n_clicks=0,
+    style={
+        "background": COLORS["primary"],
+        "color": "#FFFFFF",
+        "border": "none",
+        "borderRadius": "8px",
+        "padding": "10px 16px",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "cursor": "pointer",
+    },
+)
+
 layout = html.Div([
     page_header("Talent Matching",
-                "Find best-fit candidates with current, complete profiles"),
+                "Find best-fit candidates with current, complete profiles", export_button),
+    html.Div(id="tm-export-pdf-dummy", style={"display": "none"}),
     filter_bar,
     html.Div(id="tm-kpi-row", style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"], "flexWrap": "wrap"}),
 
@@ -346,6 +363,14 @@ layout = html.Div([
                      style_extra={"flex": "6"}),
     ], style={"display": "flex", "gap": SPACE["xs"]}),
 ], style=PAGE_STYLE)
+
+
+dash.clientside_callback(
+    "function(n_clicks) { if (n_clicks) { window.print(); } return ''; }",
+    Output("tm-export-pdf-dummy", "children"),
+    Input("tm-export-pdf-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 @callback(
