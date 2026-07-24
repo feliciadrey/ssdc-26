@@ -1,5 +1,5 @@
 from dash import html
-from utils.theme import COLORS, CARD_STYLE, SHADOW_MD, RADIUS_SM, DARK_CARD, DARK_CARD_TEXT, DARK_CARD_TEXT_MUTED
+from utils.theme import COLORS, CARD_STYLE, SHADOW_SM, SHADOW_MD, RADIUS_SM, DARK_CARD, DARK_CARD_TEXT, DARK_CARD_TEXT_MUTED
 
 
 def _icon_badge(icon, bg, fg):
