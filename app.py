@@ -2,7 +2,7 @@ import dash
 from dash import html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 
-from utils.theme import COLORS, SIDEBAR_WIDTH, SHADOW_SM
+from utils.theme import COLORS, SIDEBAR_WIDTH, SIDEBAR_GRADIENT, SHADOW_SM, SHADOW_LG
 
 app = dash.Dash(
     __name__,
@@ -34,7 +34,7 @@ def nav_link(label, href, icon, link_id):
         className="sidebar-link",
         style={
             "display": "block", "padding": "10px 14px", "borderRadius": "10px",
-            "color": COLORS["text_secondary"], "textDecoration": "none", "marginBottom": "3px",
+            "color": "rgba(255,255,255,0.75)", "textDecoration": "none", "marginBottom": "3px",
         },
     )
 
@@ -43,28 +43,28 @@ sidebar = html.Div([
     html.Div([
         html.Div([
             html.Div(
-                html.I(className="bi bi-mortarboard-fill", style={"fontSize": "16px", "color": "#fff"}),
+                html.I(className="bi bi-briefcase-fill", style={"fontSize": "16px", "color": COLORS["primary_dark"]}),
                 style={
                     "width": "34px", "height": "34px", "borderRadius": "10px",
-                    "background": f"linear-gradient(135deg, {COLORS['primary']} 0%, {COLORS['primary_dark']} 100%)",
+                    "background": "#FFFFFF",
                     "display": "flex", "alignItems": "center", "justifyContent": "center",
                     "boxShadow": SHADOW_SM,
                 },
             ),
             html.Div([
-                html.Div("SSDC", style={"fontSize": "16.5px", "fontWeight": "800",
-                                         "color": COLORS["text"], "letterSpacing": "-0.01em", "lineHeight": "1.1"}),
-                html.Div("Placement Intelligence", style={
-                    "fontSize": "9.5px", "color": COLORS["muted"], "textTransform": "uppercase",
+                html.Div("Clushthree", style={"fontSize": "16.5px", "fontWeight": "800",
+                                         "color": "#FFFFFF", "letterSpacing": "-0.01em", "lineHeight": "1.1"}),
+                html.Div("Student Placement System", style={
+                    "fontSize": "9.5px", "color": "rgba(255,255,255,0.65)", "textTransform": "uppercase",
                     "letterSpacing": "0.06em", "fontWeight": "600",
                 }),
             ], style={"marginLeft": "10px"}),
         ], style={"display": "flex", "alignItems": "center"}),
-    ], style={"padding": "20px 18px 18px 18px", "borderBottom": f"1px solid {COLORS['border_soft']}"}),
+    ], style={"padding": "20px 18px 18px 18px", "borderBottom": "1px solid rgba(255,255,255,0.14)"}),
 
     html.Div([
         html.Div("MENU", style={
-            "fontSize": "9.5px", "fontWeight": "700", "color": COLORS["muted_light"],
+            "fontSize": "9.5px", "fontWeight": "700", "color": "rgba(255,255,255,0.45)",
             "letterSpacing": "0.08em", "padding": "0 14px", "marginBottom": "8px", "marginTop": "4px",
         }),
         html.Div([nav_link(label, href, icon, f"nav-link-{i}") for i, (label, href, icon) in enumerate(NAV_ITEMS)]),
@@ -74,20 +74,20 @@ sidebar = html.Div([
         html.Div([
             html.Div(style={
                 "width": "7px", "height": "7px", "borderRadius": "50%",
-                "background": COLORS["success"], "marginRight": "6px",
-                "boxShadow": f"0 0 0 3px {COLORS['success_bg']}",
+                "background": "#5FE3A3", "marginRight": "6px",
+                "boxShadow": "0 0 0 3px rgba(95,227,163,0.25)",
             }),
-            html.Span("Data tersinkron", style={"fontSize": "11px", "fontWeight": "600", "color": COLORS["text_secondary"]}),
+            html.Span("Data tersinkron", style={"fontSize": "11px", "fontWeight": "600", "color": "#FFFFFF"}),
         ], style={"display": "flex", "alignItems": "center", "marginBottom": "3px"}),
-        html.Div("17 Jul 2026, 09:12", style={"fontSize": "10.5px", "color": COLORS["muted"]}),
+        html.Div("17 Jul 2026, 09:12", style={"fontSize": "10.5px", "color": "rgba(255,255,255,0.6)"}),
     ], style={
         "position": "absolute", "bottom": "18px", "left": "16px", "right": "16px",
-        "padding": "12px 14px", "background": COLORS["surface_alt"], "borderRadius": "12px",
-        "border": f"1px solid {COLORS['border_soft']}",
+        "padding": "12px 14px", "background": "rgba(255,255,255,0.10)", "borderRadius": "12px",
+        "border": "1px solid rgba(255,255,255,0.16)",
     }),
 ], style={
     "position": "fixed", "top": 0, "left": 0, "bottom": 0, "width": SIDEBAR_WIDTH,
-    "background": COLORS["surface"], "borderRight": f"1px solid {COLORS['border_soft']}",
+    "background": SIDEBAR_GRADIENT, "boxShadow": SHADOW_LG,
     "zIndex": 100,
 })
 
