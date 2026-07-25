@@ -41,9 +41,8 @@ def _semester_sort_key(label):
     kind, years = label.split(" ", 1)
     start_year = int(years.split("/")[0])
     if kind == "Genap":
-        # Genap Y/Y+1 runs Jan-Jul of year Y+1 -> first half of that year
         return (start_year + 1, 1)
-    # Ganjil Y/Y+1 runs Aug-Dec of year Y -> second half of that year
+
     return (start_year, 2)
 
 
@@ -145,7 +144,6 @@ def matching_students(d):
     if "id_tracking_company" in d.columns and "id_tracking_company" in tracking_student.columns:
         ids = set(d["id_tracking_company"])
         return tracking_student[tracking_student["id_tracking_company"].isin(ids)].copy()
-    # fallback for datasets missing the FK column - can over-match on recurring postings
     pairs = set(zip(d["nama_perusahaan"], d["posisi"]))
     mask = list(zip(tracking_student["company"], tracking_student["position"]))
     mask = [p in pairs for p in mask]
@@ -191,9 +189,6 @@ layout = html.Div([
     filter_bar,
     html.Div(id="ov-kpi-row", style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["sm"], "flexWrap": "wrap"}),
 
-    # Primary insight row: the trend line is the single most important chart
-    # on this page (placement vs request over time), so it gets roughly
-    # double the width of its neighbor rather than an equal three-way split.
     html.Div([
         section_card("Placement Demand Trend", "Requests vs. successful placements, by month",
                      dcc.Graph(id="ov-trend-graph", config={"displayModeBar": False}),
@@ -203,7 +198,6 @@ layout = html.Div([
                      style_extra={"flex": "4"}),
     ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
 
-    # Supporting analysis: equal-weight secondary charts.
     html.Div([
         section_card("Placement by Location", "Where placed students are working",
                      html.Div([
@@ -473,11 +467,6 @@ def update_overview(semester, sektor):
             .sort_values(ascending=True)
         )
         if len(prodi_counts):
-            # Fixed height squeezes the y-axis when there are many programs,
-            # so Plotly starts silently dropping tick labels to avoid
-            # overlap. Instead, size the chart to the number of bars (with a
-            # floor so it never looks empty with just 1-2 programs) so every
-            # label always has room to render.
             prodi_height = max(232, 17 * len(prodi_counts) + 60)
             prodi_fig = go.Figure(go.Bar(
                 x=prodi_counts.values, y=prodi_counts.index, orientation="h",
