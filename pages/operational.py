@@ -68,7 +68,6 @@ def matching_students(d):
     if "id_tracking_company" in d.columns and "id_tracking_company" in tracking_student.columns:
         ids = set(d["id_tracking_company"])
         return tracking_student[tracking_student["id_tracking_company"].isin(ids)].copy()
-    # fallback for datasets missing the FK column - can over-match on recurring postings
     pairs = set(zip(d["nama_perusahaan"], d["posisi"]))
     mask = [p in pairs for p in zip(tracking_student["company"], tracking_student["position"])]
     return tracking_student[mask].copy()
