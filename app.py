@@ -52,11 +52,11 @@ sidebar = html.Div([
                 },
             ),
             html.Div([
-                html.Div("Clushthree", style={"fontSize": "16.5px", "fontWeight": "800",
+                html.Div("Student Placement System", style={"fontSize": "15px", "fontWeight": "800",
                                          "color": "#FFFFFF", "letterSpacing": "-0.01em", "lineHeight": "1.1"}),
-                html.Div("Student Placement System", style={
-                    "fontSize": "9.5px", "color": "rgba(255,255,255,0.65)", "textTransform": "uppercase",
-                    "letterSpacing": "0.06em", "fontWeight": "600",
+                html.Div("Clushthree - SSDC2026018", style={
+                    "fontSize": "9px", "color": "rgba(255,255,255,0.6)", "fontWeight": "600",
+                    "letterSpacing": "0.03em", "marginTop": "2px",
                 }),
             ], style={"marginLeft": "10px"}),
         ], style={"display": "flex", "alignItems": "center"}),
