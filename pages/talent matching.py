@@ -73,13 +73,9 @@ def sync_bucket(row):
     if not row["is_synced"]:
         return "Belum Sync"
     if pd.isna(row["last_activity_date"]):
-        # Never appeared in tracking_student — nothing to compare sync_date
-        # against, so freshness can't be assessed for this student.
         return "Belum Ditrack"
     gap = row["activity_gap_days"]
     if gap <= 0:
-        # sync_date is at/after their last tracking activity — profile was
-        # (re)synced no earlier than the moment it was actually used. Good.
         return "Sync Setelah Aktivitas"
     if gap <= STALE_DAYS:
         return f"Selaras (<= {STALE_WEEKS} minggu)"
@@ -88,7 +84,6 @@ def sync_bucket(row):
 
 sp["sync_bucket"] = sp.apply(sync_bucket, axis=1)
 
-# Buckets considered "in sync" for KPI / funnel purposes.
 GOOD_SYNC_BUCKETS = {"Sync Setelah Aktivitas", f"Selaras (<= {STALE_WEEKS} minggu)"}
 
 PRODI_OPTIONS = sorted(s for s in sp["program_studi"].dropna().unique())
@@ -206,8 +201,6 @@ def build_match_table(dt, selected_ids=None, sent_nims=None):
     dt = dt[~dt["nim"].isin(sent_nims)] if len(dt) else dt
     records = dt[TABLE_FIELDS].fillna("-").to_dict("records")
     for rec in records:
-        # "id" here is the row_id dash_table uses for selected_row_ids —
-        # it doesn't need to be a visible column, just present in the dict.
         rec["id"] = rec["nim"]
 
     return dash_table.DataTable(
@@ -344,7 +337,6 @@ layout = html.Div([
             style_extra={"flex": "1"}),
     ], style={"display": "flex", "gap": SPACE["xs"], "marginBottom": SPACE["xs"]}),
 
-    # Supporting analysis: pool health at a glance.
     html.Div([
         section_card("Document Completeness", "CV and portfolio submission status",
                      dcc.Graph(id="tm-doc-graph", config={"displayModeBar": False}),
