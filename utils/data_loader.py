@@ -1,7 +1,6 @@
 from pathlib import Path
 import pandas as pd
 
-# Resolves to ssdc26/dataset regardless of where the app is launched from
 DATA_DIR = Path(__file__).resolve().parent.parent / "dataset"
 
 
