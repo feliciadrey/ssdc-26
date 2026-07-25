@@ -11,7 +11,7 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- Sidebar nav ---------- */
+
 .sidebar-link {
     transition: background 0.15s ease, color 0.15s ease;
 }
@@ -31,11 +31,7 @@ body {
     color: #FFFFFF;
 }
 
-/* ---------- Cards ----------
-   Charts (.section-card) get the stronger hover lift; KPI cards get a
-   smaller, quieter lift so charts keep more visual weight at rest and on
-   interaction, matching the intended scan order (title -> filters -> KPIs
-   -> charts -> tables). */
+
 .section-card, .kpi-card {
     transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
@@ -48,7 +44,6 @@ body {
     transform: translateY(-1px);
 }
 
-/* ---------- Dash DataTable polish ---------- */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
     border-collapse: separate;
     border-spacing: 0;
@@ -61,7 +56,6 @@ body {
     border-bottom: 1px solid #EEF3EE !important;
 }
 
-/* ---------- Filter bar rhythm ---------- */
 .filter-bar {
     display: flex;
     gap: 8px;
@@ -70,7 +64,6 @@ body {
     margin-bottom: 12px;
 }
 
-/* ---------- Scrollbar ---------- */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -86,7 +79,6 @@ body {
     background: #A9BFB0;
 }
 
-/* ---------- Links / focus ---------- */
 a {
     text-decoration: none;
 }
@@ -95,21 +87,6 @@ a {
     outline-offset: 2px;
 }
 
-/* ---------- Dropdown filters (dcc.Dropdown / react-select) ----------
-   Dash ships these with a default blue/grey theme (border, focus ring,
-   selected-option highlight). Re-themed to the app's green so every filter
-   control reads as one family instead of a generic default.
-
-   Covers TWO possible underlying libraries so this works regardless of
-   Dash version: legacy react-select v1 (stable ".Select-*" class names)
-   and react-select v3+ (emotion-generated hashed classes, e.g.
-   "css-1s2u09g-control" — targeted here via substring attribute selectors
-   like [class*="-control"], since the hash prefix changes but the
-   "-control" / "-placeholder" / "-menu" suffix stays stable). Both rulesets
-   are scoped under .dash-dropdown, the wrapper Dash always renders around
-   dcc.Dropdown, so they can't leak onto unrelated elements. */
-
-/* -- legacy react-select v1 -- */
 .dash-dropdown .Select-control {
     border-color: #DCE6DF !important;
     border-radius: 8px !important;
@@ -172,7 +149,6 @@ a {
     color: #FFFFFF !important;
 }
 
-/* -- react-select v3+ (emotion hashed classes, matched by stable suffix) -- */
 .dash-dropdown div[class*="-control"] {
     border-color: #DCE6DF !important;
     border-radius: 8px !important;
@@ -250,7 +226,6 @@ a {
     border-color: #1B6B47 !important;
 }
 
-/* IPK (GPA) range slider on the Talent Matching page — dark green accent */
 #tm-filter-ipk .dash-slider-range {
     background-color: #0F4A30 !important;
 }
@@ -269,7 +244,6 @@ a {
     border-color: #0F4A30 !important;
 }
 
-/* ---------- Date range picker (dcc.DatePickerRange / react-dates) ---------- */
 .CalendarDay__selected,
 .CalendarDay__selected:hover {
     background: #1B6B47 !important;

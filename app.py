@@ -43,7 +43,7 @@ sidebar = html.Div([
     html.Div([
         html.Div([
             html.Div(
-                html.I(className="bi bi-briefcase-fill", style={"fontSize": "16px", "color": COLORS["primary_dark"]}),
+                html.Img(src="/assets/logo ssf.png", style={"width": "23px", "height": "23px", "objectFit": "contain"}),
                 style={
                     "width": "34px", "height": "34px", "borderRadius": "10px",
                     "background": "#FFFFFF",
@@ -114,4 +114,4 @@ def highlight_active_nav(pathname):
 
 
 if __name__ == "__main__":
-    app.run(debug=False, port=8052)
+    app.run(debug=False)
